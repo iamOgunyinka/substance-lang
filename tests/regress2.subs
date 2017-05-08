@@ -1,0 +1,30 @@
+// f = Foo.new();
+f = Foo.new(1).a(2).b(3).c(4);
+show f;
+// Foo.new().a();
+
+aa = bb.new[3];
+
+class Foo {
+	var a; var b;
+	var c; var d;
+	
+	construct new(w) {
+		a = w;
+	}
+	
+	function a(x) : public {
+		b = x;
+		return self;
+	}
+	
+	function b(y) : public {
+		c = y;
+		return self;
+	}
+	
+	function c(z) : public {
+		d = z;
+		return a + b + c + d;
+	}
+}

@@ -1,0 +1,5 @@
+.sdf
+.exe
+src/.vscode
+src/msvc/Debug
+

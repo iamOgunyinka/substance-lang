@@ -1,0 +1,92 @@
+x = 9/3;
+show x;
+
+x = 3-9;
+show x;
+
+a = 70;
+x = a / 2;
+show x;
+
+x = 4 * a;
+show x;
+
+x = 9 - a;
+show x;
+
+x = a - 9;
+show x;
+
+x = 9 + a;
+show x;
+
+x = a + 9;
+show x;
+
+x = 9 / a;
+show x;
+
+x = a / 9;
+show x;
+
+x = 9 * a;
+show x;
+
+x = a * 9;
+show x;
+
+x = 9 % a;
+show x;
+
+x = a % 9;
+show x;
+
+b = 13;
+x = a-b;
+show x;
+
+x = b-a;
+show x;
+
+x = 13.5 - 5.0;
+show x;
+
+x = 9.33 - b;
+show x;
+
+x = b/9.33;
+show x;
+
+x = 9.33/b;
+show x;
+
+x = b+9.33;
+show x;
+
+x = 9.33 + b;
+show x;
+
+x = b*9.33;
+show x;
+
+x = 9.33*b;
+show x;
+
+g = 3;
+c = 3.1415;
+x = c-5.5;
+show x;
+
+d = 11.12;
+h = 11;
+x = c-d;
+show x;
+
+x = d-c;		
+show x;
+
+x = g-h;
+show x;
+
+x = h-g;
+show x;

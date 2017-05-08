@@ -1,0 +1,15 @@
+Notes
+======
+General
+* All system classes will be pre-compiled and execute VM instructions
+* Traps will used for OS specific directives
+* Need a way to write, pre-compile and store instructions for system classes
+* TODO: add JIT support for array indexing and creation (call back?) 
+* TODO: unit test suite for specific functionality
+
+Tracing
+--------
+* Function calls need to be inlined
+    - How do we jump back to the correct place (call back?)
+    
+    

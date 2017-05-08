@@ -1,0 +1,68 @@
+// TODO: add char class support
+
+function bar () 
+{
+	a = 13;
+//	x = Array.new[13];
+//	y = Bar.new();
+}
+
+function foo() {
+	l = String.new();
+	l += 13;
+	
+	r = String.new();
+	r += 1001;
+/*
+	l += r;
+//	show l.size();
+*/
+}
+
+/*
+b = Bar.new();
+b.bar(7);
+
+class Bar {
+	var v;
+	
+	construct new (b) {
+		v = b;
+	}
+	
+	construct new () {}
+	function bar(b) {
+		if(b == 387) {
+			show 101;
+		}
+		else {
+			show b;
+		};
+	}
+}
+
+// v = Int.new[2,2];
+v = Array.new[2,3];
+v[0,1] = 12;
+
+
+x = 101;
+
+bar();
+r = Bar.new(b);
+r.bar(387);
+
+
+foo();
+
+function foo() { show 13; }
+
+v = -18.abs();
+// tt = v.abs();
+*/
+
+foo();
+
+// a = Array.new[1,1];
+// a[0,0] = 13;
+// s = String.new();

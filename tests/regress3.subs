@@ -1,0 +1,5 @@
+aa = Array.new[3];
+aa[0] = 13;
+aa[2] = 79;
+r = aa[0] + aa[2] ;
+show r;

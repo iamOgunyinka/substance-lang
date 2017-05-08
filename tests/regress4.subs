@@ -1,0 +1,47 @@
+f = Foo.new();
+// f.s(13);
+show f.g();
+
+b = Bar.new();
+b.s(7);
+show b.g();
+
+y = f + b;
+show y;
+/*
+bar( y);
+
+bar(y) {
+	show y;
+}
+*/
+
+class Foo {
+	var v;
+	
+	construct new() { v = 10; }
+	
+	+(x) { return 3 + v; }
+	
+	function s(p) {
+		v = p;
+	}
+	
+	function g() {
+		return v;
+	}
+}
+
+class Bar {
+	var v;
+	
+	construct new() {}
+	
+	function s(p) {
+		v = p;
+	}
+	
+	function g() {
+		return v;
+	}
+}
