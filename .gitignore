@@ -1,5 +1,37 @@
+<<<<<<< HEAD
 .sdf
 .exe
 src/.vscode
 src/msvc/Debug
 
+=======
+# Compiled Object files
+*.slo
+*.lo
+*.o
+*.obj
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Compiled Dynamic libraries
+*.so
+*.dylib
+*.dll
+
+# Fortran module files
+*.mod
+*.smod
+
+# Compiled Static libraries
+*.lai
+*.la
+*.a
+*.lib
+
+# Executables
+*.exe
+*.out
+*.app
+>>>>>>> 53a94158457c0143815aba597e44c7263afabf1c
