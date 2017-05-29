@@ -79,34 +79,37 @@ namespace compiler {
 		void ProcessError( const wstring &msg, ParseNode* node );
 		void ProcessError( const wstring &msg, const ScannerTokenType sync );
 		bool NoErrors();
-		AccessType DetermineAccessType( ScannerTokenType );
 
 		// parsing operations
-		std::unique_ptr<Scope>			ParseScope( Scope *parent_scope );
-		std::unique_ptr<Statement>		ParseStatement( Scope *parent );
-		std::unique_ptr<Statement>		ParseIfStatement( Scope *parent );
-		std::unique_ptr<Statement>		ParseIterationStatement( Scope *parent_scope );
-		std::unique_ptr<Statement>		ParseSwitchStatement( Scope *parent );
-		std::unique_ptr<Statement>		ParseJumpStatement( Scope *parent );
-		std::unique_ptr<Statement>		ParseShowStatement( Scope *parent_scope );
-		std::unique_ptr<Statement>		ParseCompoundStatement( Scope *parent_scope );
-		std::unique_ptr<ParsedClass>	ParseClass( Scope *parent_scope );
-		std::unique_ptr<ParsedFunction>	ParseFunction( Scope *parent_scope, FunctionType func_type );
-		std::unique_ptr<Statement>		ParseLabelledStatement( Scope *parent );
-		std::unique_ptr<Statement>		ParseExpressionStatement();
-		std::unique_ptr<Statement>		ParseDeclaration( Scope *parent_scope, ScannerTokenType def = ScannerTokenType::TOKEN_PUBLIC_ID );
-		std::unique_ptr<Expression>		ParseExpression();
-		std::unique_ptr<Expression>		ParseConditionalExpression();
-		std::unique_ptr<Expression>		ParseAssignmentExpression();
-		std::unique_ptr<Expression>		ParseBinaryExpression();
-		std::unique_ptr<Expression>		ParseBinaryOpExpression( int const precedence, std::unique_ptr<Expression> );
-		std::unique_ptr<Expression>		ParseUnaryExpression();
-		std::unique_ptr<Expression>		ParsePostfixExpression();
-		std::unique_ptr<Expression>		ParsePrimaryExpression();
-		std::unique_ptr<ExpressionList>	ParseArgumentExpressionList();
-		std::unique_ptr<Expression>		ParseLambdaExpression();
-		std::unique_ptr<Expression>		ParseListExpression();
-		std::unique_ptr<Expression>		ParseDictionaryExpression();
+		Scope*			ParseScope( Scope *parent_scope );
+		Statement*		ParseStatement( Scope *parent );
+		Statement*		ParseIfStatement( Scope *parent );
+		Statement*		ParseIterationStatement( Scope *parent_scope );
+		Statement*		ParseSwitchStatement( Scope *parent );
+		Statement*		ParseJumpStatement( Scope *parent );
+		Statement*		ParseShowStatement( Scope *parent_scope );
+		CompoundStatement*	ParseCompoundStatement( Scope *parent_scope );
+		
+		Declaration*	ParseClass( Scope *parent_scope, AccessType, StorageType );
+		Declaration*	ParseFunction( Scope *parent_scope, FunctionType func_type, AccessType, StorageType );
+		Declaration*	ParseVariableDeclaration( Scope *parent_scope, AccessType, StorageType );
+		Declaration*	ParseDeclaration( Scope *parent_scope );
+		Declaration*	ParseEmptyStatement( Scope * );
+
+		Statement*		ParseLabelledStatement( Scope *parent );
+		Statement*		ParseExpressionStatement();
+		Expression*		ParseExpression();
+		Expression*		ParseConditionalExpression();
+		Expression*		ParseAssignmentExpression();
+		Expression*		ParseBinaryExpression();
+		Expression*		ParseBinaryOpExpression( int const precedence, Expression* );
+		Expression*		ParseUnaryExpression();
+		Expression*		ParsePostfixExpression();
+		Expression*		ParsePrimaryExpression();
+		ExpressionList*	ParseArgumentExpressionList();
+		Expression*		ParseLambdaExpression();
+		Expression*		ParseListExpression();
+		Expression*		ParseDictionaryExpression();
 	public:
 		Parser( const wstring &input ){
 			this->input = input;

@@ -2,7 +2,6 @@
  * Language parser
  *
  * Copyright (c) 2017 Joshua Ogunyinka
- * Copyright (c) 2013-2016 Randy Hollines
  * All rights reserved.
  */
 
@@ -115,21 +114,6 @@ bool Parser::NoErrors()
 	return true;
 }
 
-AccessType Parser::DetermineAccessType( ScannerTokenType tt )
-{
-	switch ( tt ){
-	case ScannerTokenType::TOKEN_STATIC_ID:
-		return AccessType::STATIC_ACCESS;
-	case ScannerTokenType::TOKEN_PUBLIC_ID:
-		return AccessType::PUBLIC_ACCESS;
-	case ScannerTokenType::TOKEN_PRIVATE_ID:
-		return AccessType::PRIVATE_ACCESS;
-	case ScannerTokenType::TOKEN_PROTECTED_ID:
-		return AccessType::PROTECTED_ACCESS;
-	default:
-		return AccessType::INVALID_ACCESS;
-	}
-}
 // To-do Confirm exponentiation( x**2 ) precedence
 static int GetBinaryOperatorPrecedence( ScannerTokenType tk )
 {
@@ -191,12 +175,12 @@ std::unique_ptr<ParsedProgram> Parser::Parse()
 	NextToken();
 
 	std::unique_ptr<ParsedProgram> program{ new ParsedProgram };
-	auto program_scope = ParseScope( program->GetGlobalScope().get() );
+	auto program_scope = ParseScope( program->GetGlobalScope() );
 	if ( !program_scope ){
 		ProcessError( L"Fatal error. Unable to parse program." );
 		std::exit( -1 );
 	}
-	program->SetConstructs( std::move( program_scope ) );
+	program->SetConstructs( program_scope );
 	if ( NoErrors() ) {
 		return program;
 	}
@@ -204,12 +188,13 @@ std::unique_ptr<ParsedProgram> Parser::Parse()
 	return nullptr;
 }
 
-std::unique_ptr<ParsedClass> Parser::ParseClass( Scope *parent_scope )
+Declaration* Parser::ParseClass( Scope *parent_scope, AccessType access_type, StorageType storage_type )
 {
 	unsigned int const line_num = GetLineNumber();
 	std::wstring const &file_name = GetFileName();
 
-	NextToken(); // consume 'class'
+	bool is_struct = CurrentToken().GetType() == ScannerTokenType::TOKEN_STRUCT_ID;
+	NextToken(); // consume 'class' or 'struct'
 
 	if ( !Match( ScannerTokenType::TOKEN_IDENT ) ) {
 		ProcessError( ScannerTokenType::TOKEN_IDENT );
@@ -220,91 +205,41 @@ std::unique_ptr<ParsedClass> Parser::ParseClass( Scope *parent_scope )
 	Show( L"Class: name='" + scanner->GetToken()->GetIdentifier() + L"'", 2 );
 #endif
 
-	std::unique_ptr<ParsedClass> klass{ new ParsedClass( file_name, line_num, scanner->GetToken()->GetIdentifier(), parent_scope ) };
-	NextToken();
+	auto klass = new ClassDeclaration( file_name, line_num, CurrentToken().GetIdentifier(), parent_scope, is_struct );
+	NextToken(); // consume class name
+
+	// we have a base/super class
+	if ( Match( ScannerTokenType::TOKEN_COLON ) ){
+		NextToken(); // consume ':'
+		if ( !Match( ScannerTokenType::TOKEN_IDENT ) ){
+			ProcessError( L"Expected a super-class name" );
+		}
+		else {
+			klass->SetBaseClass( CurrentToken().GetIdentifier() );
+			NextToken();
+		}
+	}
 
 	if ( !Match( ScannerTokenType::TOKEN_OPEN_BRACE ) ) {
 		ProcessError( ScannerTokenType::TOKEN_OPEN_BRACE );
+		delete klass;
+		klass = nullptr;
+
 		return nullptr;
 	}
 	NextToken(); // consume '{'
+	Declaration* declaration = ParseDeclaration( parent_scope );
 
-	auto function_parser_handler = [&] ( FunctionType func_type, std::wstring const & stype )->bool {
-		std::unique_ptr<ParsedFunction> function{ ParseFunction( parent_scope, func_type ) };
-		if ( !function ) return false;
-
-		if ( !klass->AddFunction( std::move( function ) ) ){
-			ProcessError( stype + L" with the same name and similar signature exists in this scope." );
-			return false;
+	while ( declaration ){
+		if ( klass->AddDeclaration( std::move( declaration ) ) ){
+			ProcessError( L"Unable to add declaration" );
 		}
-		return true;
-	};
-
-	while ( !Match( ScannerTokenType::TOKEN_END_OF_STREAM ) && !Match( ScannerTokenType::TOKEN_CLOSED_BRACE ) )
-	{
-		ScannerTokenType const tk_type = CurrentToken().GetType();
-		bool access_specifier_used = false;
-
-		if ( tk_type == ScannerTokenType::TOKEN_PRIVATE_ID || tk_type == ScannerTokenType::TOKEN_PUBLIC_ID
-			|| tk_type == ScannerTokenType::TOKEN_PROTECTED_ID || ScannerTokenType::TOKEN_STATIC_ID == tk_type ){
-			access_specifier_used = true;
-			NextToken();
-		}
-		switch ( CurrentToken().GetType() )
-		{
-		case ScannerTokenType::TOKEN_VAR_ID:
-		{
-			std::unique_ptr<Statement> declaration_statement{ ParseDeclaration( klass->GetScope().get(), tk_type ) };
-			if ( !declaration_statement ){
-				return nullptr;
-			}
-			klass->AddStatement( std::move( declaration_statement ) );
-			break;
-		}
-		case ScannerTokenType::TOKEN_FUNC_ID:
-		{
-			// function_parser_handler is a local lambda declared above
-			if ( !function_parser_handler( FunctionType::FUNCTION, L"function" ) ) return nullptr;
-			break;
-		}
-		case ScannerTokenType::TOKEN_METHOD_ID:
-		{
-			if ( !function_parser_handler( FunctionType::METHOD, L"method" ) ) return nullptr;
-			break;
-		}
-		case ScannerTokenType::TOKEN_CONSTRUCT_ID:
-		{
-			if ( !function_parser_handler( FunctionType::CONSTRUCTOR, L"ctor" ) ) return nullptr;
-			break;
-		}
-		case ScannerTokenType::TOKEN_CLASS_ID:
-		{
-			std::unique_ptr<ParsedClass> parsed_class{ ParseClass( klass->GetScope().get() ) };
-			if ( !parsed_class ){
-				return nullptr;
-			}
-			if ( !klass->AddClass( std::move( parsed_class ) ) ){
-				ProcessError( L"Class with an identical name exists in this scope." );
-				return nullptr;
-			}
-			break;
-		}
-		default:
-			ProcessError( L"Invalid construct found ", CurrentToken().GetType() );
-			return nullptr;
-		}
+		declaration = ParseDeclaration( parent_scope );
 	}
-
-	if ( !Match( ScannerTokenType::TOKEN_CLOSED_BRACE ) ) {
-		ProcessError( ScannerTokenType::TOKEN_CLOSED_BRACE );
-		return nullptr;
-	}
-	NextToken(); // consume '}'
-
 	return klass;
 }
 
-std::unique_ptr<ParsedFunction> Parser::ParseFunction( Scope *parent_scope, FunctionType function_type )
+Declaration* Parser::ParseFunction( Scope *parent_scope, FunctionType function_type, AccessType access, StorageType storage )
 {
 	unsigned int const line_num = GetLineNumber();
 	std::wstring const &file_name = GetFileName();
@@ -350,7 +285,7 @@ std::unique_ptr<ParsedFunction> Parser::ParseFunction( Scope *parent_scope, Func
 	Show( stype + L": name='" + function_name + L"'", 2 );
 #endif
 
-	std::unique_ptr<ExpressionList> parameters{};
+	ExpressionList* parameters{};
 
 	// methods w/o parameters are allowed to NOT have opening and closing parenthesis
 	if ( !Match( ScannerTokenType::TOKEN_OPEN_PAREN ) ){
@@ -369,42 +304,53 @@ std::unique_ptr<ParsedFunction> Parser::ParseFunction( Scope *parent_scope, Func
 	else {
 		NextToken(); // consume '('
 		if ( !Match( ScannerTokenType::TOKEN_CLOSED_PAREN ) ){
-			parameters.reset( new ExpressionList( file_name, line_num ) );
+			parameters = new ExpressionList( file_name, line_num );
 		}
 		while ( ScannerTokenType::TOKEN_END_OF_STREAM != CurrentToken().GetType() && !Match( ScannerTokenType::TOKEN_CLOSED_PAREN ) ){
-			std::unique_ptr<Expression> expr{ ParseExpression() };
+			Expression* expr{ ParseExpression() };
 			if ( !expr ){
+				delete parameters;
+				parameters = nullptr;
+
 				ProcessError( L"Could not process parameters to functions." );
 				return nullptr;
 			}
-			parameters->AddExpression( std::move( expr ) );
+			parameters->AddExpression( expr );
 			if ( Match( ScannerTokenType::TOKEN_COMMA ) ) {
 				NextToken(); // consume ','
 				if ( Match( ScannerTokenType::TOKEN_CLOSED_PAREN ) ) {
-					ProcessError( L"Expected expression", parameters.get() );
+					ProcessError( L"Expected expression", parameters );
 				}
 			}
 		}
 		if ( !Match( ScannerTokenType::TOKEN_CLOSED_PAREN ) ){
 			ProcessError( ScannerTokenType::TOKEN_CLOSED_PAREN );
+
+			delete parameters;
+			parameters = nullptr;
+
 			return nullptr;
 		}
 		NextToken(); // consume ')'
 	}
 
 	// let's parse the function body
-	std::unique_ptr<Statement> function_body{ ParseCompoundStatement( parent_scope ) };
+	CompoundStatement* function_body = ParseCompoundStatement( parent_scope );
 	if ( !function_body ){
+		delete parameters;
+		parameters = nullptr;
+
 		return nullptr;
 	}
 
-	std::unique_ptr<ParsedFunction> function{ new ParsedFunction( file_name, line_num, function_name, std::move( parameters ) ) };
+	FunctionDeclaration* function{ new FunctionDeclaration( file_name, line_num, function_name, std::move( parameters ) ) };
 	function->SetFunctionBody( std::move( function_body ) );
-
+	function->SetAccess( access );
+	function->SetStorageType( storage );
 	return function;
 }
 
-std::unique_ptr<Statement> Parser::ParseCompoundStatement( Scope *parent )
+CompoundStatement* Parser::ParseCompoundStatement( Scope *parent )
 {
 	if ( !Match( ScannerTokenType::TOKEN_OPEN_BRACE ) ){
 		ProcessError( ScannerTokenType::TOKEN_OPEN_BRACE );
@@ -414,71 +360,74 @@ std::unique_ptr<Statement> Parser::ParseCompoundStatement( Scope *parent )
 	unsigned int const line_num = GetLineNumber();
 	auto const file_name = GetFileName();
 
-	std::unique_ptr<Scope> statement_scope{ ParseScope( parent ) };
+	Scope* statement_scope{ ParseScope( parent ) };
 	if ( !Match( ScannerTokenType::TOKEN_CLOSED_BRACE ) ){
 		ProcessError( ScannerTokenType::TOKEN_CLOSED_BRACE );
+
+		delete statement_scope;
+		statement_scope = nullptr;
 		return nullptr;
 	}
 	NextToken(); // consume '}'
 
-	std::unique_ptr<Statement> compound_statement{ new CompoundStatement( file_name, line_num, std::move( statement_scope ) ) };
-	return compound_statement;
+	return new CompoundStatement( file_name, line_num, statement_scope );
 }
 
-std::unique_ptr<Scope> Parser::ParseScope( Scope *parent_scope )
+Scope* Parser::ParseScope( Scope *parent_scope )
 {
-	std::unique_ptr<Scope> scope{ new Scope( parent_scope ) };
+	Scope* scope{ new Scope( parent_scope ) };
 	while ( !Match( ScannerTokenType::TOKEN_END_OF_STREAM ) && !Match( ScannerTokenType::TOKEN_CLOSED_BRACE ) ) {
-		if ( Match( ScannerTokenType::TOKEN_CLASS_ID ) ) {
-			std::unique_ptr<ParsedClass> klass( ParseClass( scope.get() ) );
-			if ( !klass ) {
-				return nullptr;
-			}
-			if ( !scope->AddClass( std::move( klass ) ) ) {
-				ProcessError( L"Class with the same name already exist in this scope." );
-			}
-		}
-		else if ( Match( ScannerTokenType::TOKEN_FUNC_ID ) ){
-			std::unique_ptr<ParsedFunction> function{ ParseFunction( scope.get(), FunctionType::FUNCTION ) };
-			if ( !function ){
-				return nullptr;
-			}
-			if ( !scope->AddFunction( std::move( function ) ) ){
-				ProcessError( L"Function with this name and signature exists" );
-			}
-		}
-		else {
-			std::unique_ptr<Statement> statement{ ParseStatement( scope.get() ) };
-			if ( !statement ){
-				return nullptr;
-			}
-			scope->AddStatement( std::move( statement ) );
-		}
+		scope->AddStatement( ParseStatement( parent_scope ) );
 	}
 	return scope;
 }
 
-std::unique_ptr<Statement> Parser::ParseStatement( Scope *parent_scope )
+Statement* Parser::ParseStatement( Scope *parent_scope )
 {
 	switch ( CurrentToken().GetType() )
 	{
 	case ScannerTokenType::TOKEN_CASE_ID:
 	case ScannerTokenType::TOKEN_ELSE_ID:
 		return ParseLabelledStatement( parent_scope );
-	case ScannerTokenType::TOKEN_OPEN_BRACE: // could this be a map or a scope?
+
+	case ScannerTokenType::TOKEN_SCOPE:
+		NextToken(); // consume 'scope'
 		return ParseCompoundStatement( parent_scope );
+
+	case ScannerTokenType::TOKEN_FOR_EACH_ID:
 	case ScannerTokenType::TOKEN_FOR_ID:
 	case ScannerTokenType::TOKEN_DO_ID:
 	case ScannerTokenType::TOKEN_WHILE_ID:
+	case ScannerTokenType::TOKEN_LOOP_ID:
 		return ParseIterationStatement( parent_scope );
+
 	case ScannerTokenType::TOKEN_SWITCH_ID:
 		return ParseSwitchStatement( parent_scope );
+
 	case ScannerTokenType::TOKEN_IF_ID:
 		return ParseIfStatement( parent_scope );
+
 	case ScannerTokenType::TOKEN_BREAK_ID:
-	case ScannerTokenType::TOKEN_RETURN_ID:
 	case ScannerTokenType::TOKEN_CONTINUE_ID:
+	case ScannerTokenType::TOKEN_RETURN_ID:
 		return ParseJumpStatement( parent_scope );
+
+	case ScannerTokenType::TOKEN_CLASS_ID:
+	case ScannerTokenType::TOKEN_STRUCT_ID:
+	case ScannerTokenType::TOKEN_FUNC_ID:
+	case ScannerTokenType::TOKEN_METHOD_ID:
+	case ScannerTokenType::TOKEN_CONSTRUCT_ID:
+	case ScannerTokenType::TOKEN_EXTERN_ID:
+	case ScannerTokenType::TOKEN_STATIC_ID:
+	case ScannerTokenType::TOKEN_PRIVATE_ID:
+	case ScannerTokenType::TOKEN_PUBLIC_ID:
+	case ScannerTokenType::TOKEN_PROTECTED_ID:
+	case ScannerTokenType::TOKEN_VAR_ID:
+	case ScannerTokenType::TOKEN_SEMI_COLON:
+	case ScannerTokenType::TOKEN_CONST_ID:
+		return ParseDeclaration( parent_scope );
+
+	case ScannerTokenType::TOKEN_OPEN_BRACE:
 	case ScannerTokenType::TOKEN_IDENT:
 	case ScannerTokenType::TOKEN_NOT:
 	case ScannerTokenType::TOKEN_CHAR_LIT:
@@ -491,9 +440,8 @@ std::unique_ptr<Statement> Parser::ParseStatement( Scope *parent_scope )
 	case ScannerTokenType::TOKEN_INT_LIT:
 	case ScannerTokenType::TOKEN_FLOAT_LIT:
 	case ScannerTokenType::TOKEN_AT:
+	case ScannerTokenType::TOKEN_NEW:
 		return ParseExpressionStatement();
-	case ScannerTokenType::TOKEN_VAR_ID:
-		return ParseDeclaration( parent_scope );
 	case ScannerTokenType::TOKEN_SHOW_ID:
 		return ParseShowStatement( parent_scope );
 	default:
@@ -502,20 +450,24 @@ std::unique_ptr<Statement> Parser::ParseStatement( Scope *parent_scope )
 	}
 }
 
-std::unique_ptr<Statement> Parser::ParseShowStatement( Scope *parent_scope )
+Statement* Parser::ParseShowStatement( Scope *parent_scope )
 {
 	Token const tok = CurrentToken();
 	NextToken(); // consume 'show'
-	std::unique_ptr<Expression> expr{ ParseExpression() };
+	Expression* expr{ ParseExpression() };
 	if ( !Match( ScannerTokenType::TOKEN_SEMI_COLON ) ){
 		ProcessError( ScannerTokenType::TOKEN_SEMI_COLON );
+
+		delete expr;
+		expr = nullptr;
+
 		return nullptr;
 	}
 	NextToken(); // consume ';'
-	return TreeFactory::MakeShowExpressionStatement( tok, std::move( expr ) );
+	return TreeFactory::MakeShowExpressionStatement( tok, expr );
 }
 
-std::unique_ptr<Statement> Parser::ParseIfStatement( Scope *parent_scope )
+Statement* Parser::ParseIfStatement( Scope *parent_scope )
 {
 	unsigned int const line_num = GetLineNumber();
 	std::wstring const file_name = GetFileName();
@@ -532,69 +484,102 @@ std::unique_ptr<Statement> Parser::ParseIfStatement( Scope *parent_scope )
 	}
 	NextToken();
 
-	std::unique_ptr<Expression> logical_expression{ ParseExpression() };
+	Expression* logical_expression{ ParseExpression() };
 	if ( !Match( ScannerTokenType::TOKEN_CLOSED_PAREN ) ) {
 		ProcessError( ScannerTokenType::TOKEN_CLOSED_PAREN );
+
+		delete logical_expression;
+		logical_expression = nullptr;
 		return nullptr;
 	}
 	NextToken();
 
-	std::unique_ptr<Statement> then_statement{ ParseStatement( parent_scope ) };
+	Statement* then_statement{ ParseCompoundStatement( parent_scope ) };
 
 	if ( !then_statement ){
 		ProcessError( L"Unable to parse the statement in the IF statement." );
+
+		delete logical_expression;
+		logical_expression = nullptr;
+
 		return  nullptr;
 	}
 	// let's see if there's an else part
-	std::unique_ptr<Statement> else_statement{ nullptr };
+	Statement* else_statement{};
+
 	if ( Match( ScannerTokenType::TOKEN_ELSE_ID ) ){
-		std::unique_ptr<Statement> else_temp{ ParseStatement( parent_scope ) };
-		if ( !else_temp ){
+		else_statement = ParseCompoundStatement( parent_scope );
+		if ( !else_statement ){
 			ProcessError( L"Error while processing the else part of the if statement." );
+
+			delete logical_expression;
+			delete then_statement;
+			logical_expression = nullptr;
+			then_statement = nullptr;
+
 			return nullptr;
 		}
-		else_statement.reset( else_temp.release() );
 	}
 
-	std::unique_ptr<Statement> if_statement{ new IfStatement( file_name, line_num, std::move( logical_expression ),
-		std::move( then_statement ), std::move( else_statement ) ) };
+	IfStatement* if_statement{ new IfStatement( file_name, line_num, logical_expression, then_statement, else_statement ) };
 	return if_statement;
 }
 
-std::unique_ptr<Statement> Parser::ParseIterationStatement( Scope *parent_scope )
+Statement* Parser::ParseIterationStatement( Scope *parent_scope )
 {
 	unsigned int const line_num = GetLineNumber();
 	std::wstring const file_name = GetFileName();
-	std::unique_ptr<Statement> iterative_statement{};
 
+	Statement* iterative_statement{};
 	ScannerTokenType const tk = CurrentToken().GetType();
 
-	if ( tk == ScannerTokenType::TOKEN_DO_ID ){
+	if ( tk == ScannerTokenType::TOKEN_LOOP_ID ){
+		Token const token = CurrentToken();
+		NextToken(); // consume 'loop'
+		CompoundStatement* loop_body{ ParseCompoundStatement( parent_scope ) };
+		if ( !loop_body ) return nullptr;
+		return new LoopStatement( token.GetFileName(), token.GetLineNumber(), loop_body );
+	}
+	else if ( tk == ScannerTokenType::TOKEN_DO_ID ){
 		NextToken(); // consume 'do'
-		std::unique_ptr<Statement> do_body{ ParseStatement( parent_scope ) };
+		Statement* do_body{ ParseCompoundStatement( parent_scope ) };
 		if ( !Match( ScannerTokenType::TOKEN_WHILE_ID ) ){
 			ProcessError( ScannerTokenType::TOKEN_WHILE_ID );
+
+			delete do_body;
+			do_body = nullptr;
 			return nullptr;
 		}
 		NextToken(); // consume token 'while'
 		if ( !Match( ScannerTokenType::TOKEN_OPEN_PAREN ) ){
 			ProcessError( L"Expected an open parenthesis after the `while` keyword" );
+
+			delete do_body;
+			do_body = nullptr;
 			return nullptr;
 		}
 		NextToken(); // consume '('
-		std::unique_ptr<Expression> expression{ ParseExpression() };
+		Expression* expression{ ParseExpression() };
 		if ( !Match( ScannerTokenType::TOKEN_CLOSED_PAREN ) ){
+			delete expression;
+			delete do_body;
+			expression = nullptr;
+			do_body = nullptr;
 			ProcessError( L"Expected a closing parenthesis after the expression" );
 			return nullptr;
 		}
 		NextToken(); // consume ')'
 		if ( !Match( ScannerTokenType::TOKEN_SEMI_COLON ) ){
 			ProcessError( L"Expected a semi-colon after the closing parenthesis" );
+			delete expression;
+			delete do_body;
+			expression = nullptr;
+			do_body = nullptr;
+
 			return nullptr;
 		}
 		NextToken(); // consume ';'
-		std::unique_ptr<Statement> do_while{ new DoWhileStatement( file_name, line_num, std::move( do_body ), std::move( expression ) ) };
-		return do_while;
+		return new DoWhileStatement( file_name, line_num, do_body, expression );
 	}
 	else if ( tk == ScannerTokenType::TOKEN_WHILE_ID ){
 		NextToken(); // consume 'while'
@@ -603,46 +588,51 @@ std::unique_ptr<Statement> Parser::ParseIterationStatement( Scope *parent_scope 
 			return nullptr;
 		}
 		NextToken(); // consume '('
-		std::unique_ptr<Expression> expression{ ParseExpression() };
+		Expression* expression{ ParseExpression() };
 		if ( !Match( ScannerTokenType::TOKEN_CLOSED_PAREN ) ){
 			ProcessError( ScannerTokenType::TOKEN_CLOSED_PAREN );
+			delete expression;
+			expression = nullptr;
 			return nullptr;
 		}
 		NextToken(); //consume ')'
-		std::unique_ptr<Statement> statement{ ParseStatement( parent_scope ) };
+		Statement* statement{ ParseCompoundStatement( parent_scope ) };
 		if ( expression && statement ){
-			std::unique_ptr<Statement> while_statement{ new WhileStatement( file_name, line_num, std::move( expression ),
-				std::move( statement ) ) };
-			return while_statement;
+			return new WhileStatement( file_name, line_num, expression, statement );
 		}
+		delete expression;
+		expression = nullptr;
 		return nullptr;
 	}
 	// for_each statement, MAY be written( note the space ) as for each( ... ) or foreach( ... )
 	bool is_two_word_foreach = ( tk == ScannerTokenType::TOKEN_FOR_ID && Match( ScannerTokenType::TOKEN_EACH_ID, SECOND_INDEX ) );
-	if ( is_two_word_foreach || tk == ScannerTokenType::TOKEN_FOR_EACH_ID ){
-		if ( is_two_word_foreach ){
-			NextToken();
-		}
-		NextToken();
+	if ( is_two_word_foreach ){
+		NextToken(); // consume 'for'
 	}
+	NextToken(); // consume 'foreach' or in case of two worded for each, consume 'each'
 	if ( !Match( ScannerTokenType::TOKEN_OPEN_PAREN ) ){
 		ProcessError( ScannerTokenType::TOKEN_OPEN_PAREN );
 		return nullptr;
 	}
 	NextToken(); // consume '('
-	std::unique_ptr<Expression> for_each_expr{ ParseExpression() };
+	Expression* for_each_expr{ ParseExpression() };
 
 	NextToken(); // consume ')'
-	std::unique_ptr<Statement> for_each_body_statement{ ParseStatement( parent_scope ) };
+	Statement* for_each_body_statement{ ParseCompoundStatement( parent_scope ) };
+	
 	if ( for_each_expr && for_each_body_statement ){
-		std::unique_ptr<Statement> for_each_statement{ new ForEachStatement( file_name, line_num, std::move( for_each_expr ),
-			std::move( for_each_body_statement ) ) };
-		return for_each_statement;
+		return new ForEachStatement( file_name, line_num, for_each_expr, for_each_body_statement );
 	}
+
+	delete for_each_expr;
+	delete for_each_body_statement;
+	for_each_expr = nullptr;
+	for_each_body_statement = nullptr;
+	
 	return nullptr;
 }
 
-std::unique_ptr<Statement> Parser::ParseLabelledStatement( Scope *parent )
+Statement* Parser::ParseLabelledStatement( Scope *parent )
 {
 	Token const tok = CurrentToken();
 
@@ -658,37 +648,37 @@ std::unique_ptr<Statement> Parser::ParseLabelledStatement( Scope *parent )
 	case ScannerTokenType::TOKEN_CASE_ID:
 	{
 		NextToken(); // consume 'case'
-		std::unique_ptr<Expression> expr{ ParseConditionalExpression() };
+		Expression* expr{ ParseConditionalExpression() };
 		if ( !expr ){
 			return nullptr;
 		}
 		if ( !Match( ScannerTokenType::TOKEN_COLON ) ){
 			ProcessError( ScannerTokenType::TOKEN_COLON );
+			delete expr;
+			expr = nullptr;
 			return nullptr;
 		}
-		std::unique_ptr<Statement> statement{ ParseStatement( parent ) };
+		NextToken(); // consume ':'
+		Statement* statement{ ParseStatement( parent ) };
 		if ( !statement ){
+			delete expr;
+			expr = nullptr;
 			return nullptr;
 		}
-		std::unique_ptr<Statement> case_{ new CaseStatement( tok.GetFileName(), tok.GetLineNumber(), std::move( expr ),
-			std::move( statement ) ) };
-		return case_;
+		return new CaseStatement( tok.GetFileName(), tok.GetLineNumber(), expr, statement );
 	}
-	break;
 	default:
 		ProcessError( L"Identifier allowed in this scope is 'else' and 'case'" );
 		return nullptr;
 	}
-	std::unique_ptr<Statement> statement{ ParseStatement( parent ) };
+	Statement* statement{ ParseStatement( parent ) };
 	if ( !statement ){
 		return nullptr;
 	}
-	std::unique_ptr<Statement> case_{ new LabelledStatement( tok.GetFileName(), tok.GetLineNumber(), tok.GetIdentifier(),
-		std::move( statement ) ) };
-	return case_;
+	return new LabelledStatement( tok.GetFileName(), tok.GetLineNumber(), tok.GetIdentifier(), statement );
 }
 
-std::unique_ptr<Statement> Parser::ParseSwitchStatement( Scope *parent_scope )
+Statement* Parser::ParseSwitchStatement( Scope *parent_scope )
 {
 	Token const tok = CurrentToken();
 	NextToken(); // consume 'switch'
@@ -697,23 +687,25 @@ std::unique_ptr<Statement> Parser::ParseSwitchStatement( Scope *parent_scope )
 		return nullptr;
 	}
 	NextToken(); // consume '('
-	std::unique_ptr<Expression> switch_expression{ ParseExpression() };
+	Expression* switch_expression{ ParseExpression() };
 	if ( !switch_expression ) return nullptr;
 
 	if ( !Match( ScannerTokenType::TOKEN_CLOSED_PAREN ) ){
 		ProcessError( ScannerTokenType::TOKEN_CLOSED_PAREN );
+		delete switch_expression;
+		switch_expression = nullptr;
 		return nullptr;
 	}
 	NextToken(); // consume ')'
-	std::unique_ptr<Statement> switch_body{ ParseCompoundStatement( parent_scope ) };
-	if ( !switch_body ) return nullptr;
-
-	std::unique_ptr<Statement> switch_statement{ new SwitchStatement( tok.GetFileName(), tok.GetLineNumber(),
-		std::move( switch_expression ), std::move( switch_body ) ) };
-	return switch_statement;
+	Statement* switch_body{ ParseCompoundStatement( parent_scope ) };
+	if ( !switch_body ) {
+		delete switch_expression;
+		return nullptr;
+	}
+	return new SwitchStatement( tok.GetFileName(), tok.GetLineNumber(), switch_expression, switch_body );
 }
 
-std::unique_ptr<Statement> Parser::ParseJumpStatement( Scope *parent )
+Statement* Parser::ParseJumpStatement( Scope *parent )
 {
 	Token const tok = CurrentToken();
 	switch ( tok.GetType() ){
@@ -736,16 +728,18 @@ std::unique_ptr<Statement> Parser::ParseJumpStatement( Scope *parent )
 	case ScannerTokenType::TOKEN_RETURN_ID:
 	{
 		NextToken(); // consume 'return'
-		std::unique_ptr<Expression> expression{};
+		Expression* expression{};
 		if ( !Match( ScannerTokenType::TOKEN_SEMI_COLON ) ){
 			expression = ParseExpression();
 		}
 		if ( !Match( ScannerTokenType::TOKEN_SEMI_COLON ) ){
 			ProcessError( ScannerTokenType::TOKEN_SEMI_COLON );
+			delete expression;
+			expression = nullptr;
 			return nullptr;
 		}
 		NextToken(); // consume ';'
-		return TreeFactory::MakeReturnStatement( tok.GetFileName(), tok.GetLineNumber(), std::move( expression ) );
+		return TreeFactory::MakeReturnStatement( tok.GetFileName(), tok.GetLineNumber(), expression );
 	}
 	default:
 		ProcessError( L"Unexpected statement" );
@@ -753,29 +747,29 @@ std::unique_ptr<Statement> Parser::ParseJumpStatement( Scope *parent )
 	}
 }
 
-std::unique_ptr<Statement> Parser::ParseExpressionStatement()
+Statement* Parser::ParseExpressionStatement()
 {
 	Token const tok = CurrentToken();
-	std::unique_ptr<Expression> expression{};
-	if ( tok.GetType() != ScannerTokenType::TOKEN_SEMI_COLON ){
-		expression = ParseExpression();
-	}
+	Expression* expression{ ParseExpression() };
+
 	if ( !Match( ScannerTokenType::TOKEN_SEMI_COLON ) ){
 		ProcessError( ScannerTokenType::TOKEN_SEMI_COLON );
+		delete expression;
+		expression = nullptr;
 		return nullptr;
 	}
 	NextToken(); // consume ';'
-	return TreeFactory::MakeExpressionStatement( tok.GetFileName(), tok.GetLineNumber(), std::move( expression ) );
+	return TreeFactory::MakeExpressionStatement( tok.GetFileName(), tok.GetLineNumber(), expression );
 }
 
-std::unique_ptr<Expression> Parser::ParseExpression()
+Expression* Parser::ParseExpression()
 {
 	return ParseAssignmentExpression();
 }
 
-std::unique_ptr<Expression> Parser::ParseAssignmentExpression()
+Expression* Parser::ParseAssignmentExpression()
 {
-	std::unique_ptr<Expression> expr = ParseConditionalExpression();
+	Expression* expr = ParseConditionalExpression();
 
 	switch ( CurrentToken().GetType() ){
 	case ScannerTokenType::TOKEN_ASSIGN:
@@ -786,52 +780,74 @@ std::unique_ptr<Expression> Parser::ParseAssignmentExpression()
 	{
 		auto const tok = CurrentToken();
 		NextToken();
-		return TreeFactory::MakeAssignmentExpression( tok, std::move( expr ), ParseAssignmentExpression() );
+		return TreeFactory::MakeAssignmentExpression( tok, expr, ParseAssignmentExpression() );
 	}
 	default:;
 	}
 	return expr;
 }
 
-std::unique_ptr<Expression>	Parser::ParseConditionalExpression()
+Expression*	Parser::ParseConditionalExpression()
 {
-	std::unique_ptr<Expression> expression{ ParseBinaryExpression() };
+	Expression* expression{ ParseBinaryExpression() };
 	if ( !expression ){
 		return nullptr;
 	}
 	if ( CurrentToken().GetType() == ScannerTokenType::TOKEN_QUESTION_MARK ){
 		Token const tok = CurrentToken();
 		NextToken(); // consume '?'
-		std::unique_ptr<Expression> lhs_expression{ ParseExpression() };
+		Expression* lhs_expression{ ParseExpression() };
+
 		if ( !Match( ScannerTokenType::TOKEN_COLON ) ){
 			ProcessError( ScannerTokenType::TOKEN_COLON );
+
+			delete expression;
+			delete lhs_expression;
+			expression = nullptr;
+			lhs_expression = nullptr;
 			return nullptr;
 		}
 		NextToken(); // consume ':'
-		std::unique_ptr<Expression> rhs_expression{ ParseExpression() };
+		Expression* rhs_expression{ ParseExpression() };
 		if ( lhs_expression && rhs_expression ){
-			std::unique_ptr<Expression> cond_expr{ new ConditionalExpression( tok.GetFileName(), tok.GetLineNumber(),
-				std::move( expression ), std::move( lhs_expression ), std::move( rhs_expression ) ) };
-			return cond_expr;
+			return new ConditionalExpression( tok.GetFileName(), tok.GetLineNumber(), expression, lhs_expression, rhs_expression );
 		}
+		delete expression;
+		delete lhs_expression;
+		delete rhs_expression;
+		expression = nullptr;
+		lhs_expression = nullptr;
+		rhs_expression = nullptr;
+		return nullptr;
 	}
 	return expression;
 }
 
-std::unique_ptr<Expression> Parser::ParseBinaryExpression()
+Expression* Parser::ParseBinaryExpression()
 {
-	std::unique_ptr<Expression> unary_expr{ ParseUnaryExpression() };
+	Expression* unary_expr{ ParseUnaryExpression() };
 	int const lowest_precedence = 0;
 
-	return ParseBinaryOpExpression( lowest_precedence, std::move( unary_expr ));
+	return ParseBinaryOpExpression( lowest_precedence, unary_expr );
 }
 
-std::unique_ptr<Expression> Parser::ParseDictionaryExpression()
+Expression* Parser::ParseDictionaryExpression()
 {
 	if ( !Match( ScannerTokenType::TOKEN_OPEN_BRACE ) ){
 		ProcessError( L"A map type begins with an opening brace and ends with a corresponding opening brace" );
 		return nullptr;
 	}
+
+	auto clear_vector = [] ( std::vector<MapExpression::expression_ptr_pair_t> & vec ){
+		if ( !vec.empty() ){
+			for ( MapExpression::expression_ptr_pair_t &key_value : vec ){
+				delete key_value.first;
+				delete key_value.second;
+				key_value.first = nullptr;
+				key_value.second = nullptr;
+			}
+		}
+	};
 	Token const token = CurrentToken();
 	NextToken(); // consume '{'
 	std::vector<MapExpression::expression_ptr_pair_t> key_datum_list{};
@@ -839,12 +855,20 @@ std::unique_ptr<Expression> Parser::ParseDictionaryExpression()
 		auto key_expression = ParseExpression();
 		if ( !Match( ScannerTokenType::TOKEN_COLON ) ){
 			ProcessError( L"Expects a colon as a map separator" );
+			delete key_expression;
+			key_expression = nullptr;
+			clear_vector( key_datum_list );
 			return nullptr;
 		}
 		NextToken(); // consume ':'
 		auto value_expression = ParseExpression();
 		if ( !( key_expression && value_expression ) ){
 			ProcessError( L"Unable to parse key/value expression for map" );
+			delete key_expression;
+			delete value_expression;
+			key_expression = nullptr;
+			value_expression = nullptr;
+			clear_vector( key_datum_list );
 			return nullptr;
 		}
 		key_datum_list.push_back( { std::move( key_expression ), std::move( value_expression ) } );
@@ -859,7 +883,7 @@ std::unique_ptr<Expression> Parser::ParseDictionaryExpression()
 	return TreeFactory::MakeMapExpression( token, std::move( key_datum_list ) );
 }
 
-std::unique_ptr<Expression> Parser::ParseListExpression()
+Expression* Parser::ParseListExpression()
 {
 	if ( !Match( ScannerTokenType::TOKEN_OPEN_BRACKET ) ){
 		ProcessError( ScannerTokenType::TOKEN_OPEN_BRACKET );
@@ -867,9 +891,9 @@ std::unique_ptr<Expression> Parser::ParseListExpression()
 	}
 	Token const tok = CurrentToken();
 	NextToken(); // consume '['
-	std::unique_ptr<ExpressionList> list_params{};
+	ExpressionList* list_params{};
 	if ( !Match( ScannerTokenType::TOKEN_CLOSED_BRACKET ) ){
-		list_params.reset( new ExpressionList( CurrentToken().GetFileName(), CurrentToken().GetLineNumber() ) );
+		list_params = new ExpressionList( CurrentToken().GetFileName(), CurrentToken().GetLineNumber() );
 	}
 	while ( !Match( ScannerTokenType::TOKEN_END_OF_STREAM ) && !Match( ScannerTokenType::TOKEN_CLOSED_BRACKET ) ){
 		list_params->AddExpression( ParseExpression() );
@@ -878,13 +902,17 @@ std::unique_ptr<Expression> Parser::ParseListExpression()
 	}
 	if ( !Match( ScannerTokenType::TOKEN_CLOSED_BRACKET ) ){
 		ProcessError( ScannerTokenType::TOKEN_CLOSED_BRACKET );
+		if ( list_params ){
+			delete list_params;
+			list_params = nullptr;
+		}
 		return nullptr;
 	}
 	NextToken(); // consume ']'
-	return TreeFactory::MakeListExpression( tok, std::move( list_params ) );
+	return TreeFactory::MakeListExpression( tok, list_params );
 }
 
-std::unique_ptr<Expression> Parser::ParseUnaryExpression()
+Expression* Parser::ParseUnaryExpression()
 {
 	Token const token = CurrentToken();
 	switch ( token.GetType() ){
@@ -904,7 +932,7 @@ std::unique_ptr<Expression> Parser::ParseUnaryExpression()
 	return ParsePostfixExpression();
 }
 
-std::unique_ptr<Expression> Parser::ParsePrimaryExpression()
+Expression* Parser::ParsePrimaryExpression()
 {
 	Token const tok = CurrentToken();
 	switch ( tok.GetType() )
@@ -912,8 +940,7 @@ std::unique_ptr<Expression> Parser::ParsePrimaryExpression()
 	case ScannerTokenType::TOKEN_NEW:
 	{
 		NextToken();
-		std::unique_ptr<Expression> expr{ ParseExpression() };
-		return TreeFactory::MakeNewExpression( tok, std::move( expr ) );
+		return TreeFactory::MakeNewExpression( tok, ParseExpression() );
 	}
 	case ScannerTokenType::TOKEN_NULL:
 		NextToken();
@@ -948,12 +975,15 @@ std::unique_ptr<Expression> Parser::ParsePrimaryExpression()
 	case ScannerTokenType::TOKEN_OPEN_PAREN:
 	{
 		NextToken(); // consume '('
-		std::unique_ptr<Expression> expr{ ParseExpression() };
+		Expression* expr{ ParseExpression() };
 		if ( !Match( ScannerTokenType::TOKEN_CLOSED_PAREN ) ){
 			ProcessError( L"Expected a closing parenthesis before", scanner->GetToken( SECOND_INDEX )->GetType() );
+			delete expr;
+			expr = nullptr;
 			return nullptr;
 		}
 		NextToken(); // consume ')'
+		std::cout << "Finished parsing closing paren\n";
 		return expr;
 	}
 	default:
@@ -962,15 +992,20 @@ std::unique_ptr<Expression> Parser::ParsePrimaryExpression()
 	return nullptr;
 }
 
-std::unique_ptr<ExpressionList> Parser::ParseArgumentExpressionList()
+ExpressionList* Parser::ParseArgumentExpressionList()
 {
-	std::unique_ptr<ExpressionList> argList{};
+	ExpressionList* argList{};
 	if ( !Match( ScannerTokenType::TOKEN_CLOSED_PAREN ) ){
-		argList = std::make_unique<ExpressionList>( CurrentToken().GetFileName(), CurrentToken().GetLineNumber() );
+		argList = new ExpressionList( CurrentToken().GetFileName(), CurrentToken().GetLineNumber() );
 		while ( !Match( ScannerTokenType::TOKEN_CLOSED_PAREN ) ){
-			std::unique_ptr<Expression> expr{ ParseAssignmentExpression() };
-			if ( !expr ) return nullptr;
-			argList->AddExpression( std::move( expr ) );
+			Expression* expr{ ParseAssignmentExpression() };
+			if ( !expr ) {
+				delete argList;
+				argList = nullptr;
+
+				return nullptr;
+			}
+			argList->AddExpression( expr );
 			if ( Match( ScannerTokenType::TOKEN_COMMA ) ){
 				NextToken();
 			}
@@ -979,20 +1014,20 @@ std::unique_ptr<ExpressionList> Parser::ParseArgumentExpressionList()
 	return argList;
 }
 
-std::unique_ptr<Expression> Parser::ParseLambdaExpression()
+Expression* Parser::ParseLambdaExpression()
 {
 	Token const token = CurrentToken();
 	if ( !Match( ScannerTokenType::TOKEN_AT ) ){
 		ProcessError( L"Expected a lambda expresion to start with an @ symbol" );
 		return nullptr;
 	}
-	std::unique_ptr<ExpressionList> lambda_parameters{};
+	ExpressionList* lambda_parameters{};
 	NextToken(); // consume '@'
 	// parameter body, i.e. (),  is optional
 	if ( Match( ScannerTokenType::TOKEN_OPEN_PAREN ) ){
 		NextToken(); // consume '('
 		if ( !Match( ScannerTokenType::TOKEN_CLOSED_PAREN ) ){
-			lambda_parameters.reset( new ExpressionList( token.GetFileName(), token.GetLineNumber() ) );
+			lambda_parameters = new ExpressionList( token.GetFileName(), token.GetLineNumber() );
 		}
 		while ( !Match( ScannerTokenType::TOKEN_END_OF_STREAM ) && !Match( ScannerTokenType::TOKEN_CLOSED_PAREN ) ){
 			lambda_parameters->AddExpression( ParseExpression() );
@@ -1005,14 +1040,12 @@ std::unique_ptr<Expression> Parser::ParseLambdaExpression()
 		NextToken(); // consume ')'
 	}
 
-	std::unique_ptr<Expression> lambda_expression{ new LambdaExpression( token, std::move( lambda_parameters ),
-		ParseCompoundStatement( nullptr ) ) };
-	return lambda_expression;
+	return new LambdaExpression( token, lambda_parameters, ParseCompoundStatement( nullptr ) );
 }
 
-std::unique_ptr<Expression> Parser::ParsePostfixExpression()
+Expression* Parser::ParsePostfixExpression()
 {
-	std::unique_ptr<Expression> expr{ ParsePrimaryExpression() };
+	Expression* expr{ ParsePrimaryExpression() };
 
 	while ( true )
 	{
@@ -1022,29 +1055,32 @@ std::unique_ptr<Expression> Parser::ParsePostfixExpression()
 			auto const token = CurrentToken();
 			NextToken(); // consume '('
 			// parse argument_list and expect ')'
-			std::unique_ptr<ExpressionList> argExprList{ ParseArgumentExpressionList() };
+			ExpressionList* argExprList{ ParseArgumentExpressionList() };
 			if ( !Match( ScannerTokenType::TOKEN_CLOSED_PAREN ) ) {
 				ProcessError( L"Expects a closing parenthesis before the next token." );
+				delete expr;
+				delete argExprList;
+				expr = nullptr;
+				argExprList = nullptr;
 				return nullptr;
 			}
 			NextToken(); // consume ')'
-			std::unique_ptr<Expression> new_expr{ new FunctionCall( token.GetFileName(), token.GetLineNumber(), std::move( expr ),
-				std::move( argExprList ) ) };
-			expr = std::move( new_expr );
+
+			expr = new FunctionCall( token.GetFileName(), token.GetLineNumber(), expr, argExprList );
 			break;
 		}
 		case ScannerTokenType::TOKEN_OPEN_BRACKET: // array subscript
 		{
 			NextToken(); // consume '['
-			std::unique_ptr<Expression> subscript_expression{ ParseExpression() };
+			Expression* subscript_expression{ ParseExpression() };
 			if ( !Match( ScannerTokenType::TOKEN_CLOSED_BRACKET ) ){
 				ProcessError( ScannerTokenType::TOKEN_CLOSED_BRACKET );
+				delete expr;
+				expr = nullptr;
 				return nullptr;
 			}
 			NextToken(); // consume ']'
-			std::unique_ptr<Expression> expression{ new SubscriptExpression( CurrentToken().GetFileName(),
-				CurrentToken().GetLineNumber(), std::move( expr ), std::move( subscript_expression ) ) };
-			expr = std::move( expression );
+			expr = new SubscriptExpression( CurrentToken().GetFileName(), CurrentToken().GetLineNumber(), expr, subscript_expression );
 			break;
 		}
 		case ScannerTokenType::TOKEN_PERIOD:
@@ -1053,28 +1089,26 @@ std::unique_ptr<Expression> Parser::ParsePostfixExpression()
 			Token const curr_token = CurrentToken();
 			if ( !Match( ScannerTokenType::TOKEN_IDENT ) ){
 				ProcessError( L"Expected an identifier after the dot operator." );
+				delete expr;
+				expr = nullptr;
 				return nullptr;
 			}
 			NextToken(); // consume identifier
-			std::unique_ptr<Expression> period_expr{ new DotExpression( curr_token.GetFileName(), curr_token.GetLineNumber(),
-				curr_token, std::move( expr ) ) };
-			expr = std::move( period_expr );
+			expr = new DotExpression( curr_token.GetFileName(), curr_token.GetLineNumber(), curr_token, expr );
 			break;
 		}
 		case ScannerTokenType::TOKEN_INCR:
 		{
 			NextToken(); // consume '++'
-			std::unique_ptr<Expression> expr_temp{ std::move( expr ) };
 			auto curr_token = CurrentToken();
-			expr.reset( new PostIncrExpression( curr_token.GetFileName(), curr_token.GetLineNumber(), std::move( expr_temp ) ) );
+			expr = new PostIncrExpression( curr_token.GetFileName(), curr_token.GetLineNumber(), expr );
 			break;
 		}
 		case ScannerTokenType::TOKEN_DECR:
 		{
 			NextToken(); // consume '--'
-			std::unique_ptr<Expression> expr_temp{ std::move( expr ) };
 			auto curr_token = CurrentToken();
-			expr.reset( new PostDecrExpression( curr_token.GetFileName(), curr_token.GetLineNumber(), std::move( expr_temp ) ) );
+			expr = new PostDecrExpression( curr_token.GetFileName(), curr_token.GetLineNumber(), expr );
 			break;
 		}
 		default:
@@ -1086,7 +1120,7 @@ std::unique_ptr<Expression> Parser::ParsePostfixExpression()
 } // end-ParsePostfixExpression
 
 // Precedence Climbing
-std::unique_ptr<Expression> Parser::ParseBinaryOpExpression( int const precedence, std::unique_ptr<Expression> unary_expr )
+Expression* Parser::ParseBinaryOpExpression( int const precedence, Expression* unary_expr )
 {
 	while ( true ){
 		int const currentPrecedence = GetTokenPrecedence();
@@ -1096,51 +1130,120 @@ std::unique_ptr<Expression> Parser::ParseBinaryOpExpression( int const precedenc
 
 		Token const tok = CurrentToken();
 		NextToken(); // consume current operator
-		std::unique_ptr<Expression> second_expr{ ParseUnaryExpression() };
+		Expression* second_expr{ ParseUnaryExpression() };
 		int const nextPrecedence = GetTokenPrecedence();
 		if ( currentPrecedence < nextPrecedence ){
-			std::unique_ptr<Expression> new_result{ ParseBinaryOpExpression( currentPrecedence + 1, std::move( second_expr )) };
-			second_expr = std::move( new_result );
+			second_expr = ParseBinaryOpExpression( currentPrecedence + 1, second_expr );
 		}
-		std::unique_ptr<Expression> unary_expr_temp{ std::move( unary_expr ) };
-		unary_expr.reset( new BinaryExpression( tok, std::move( unary_expr_temp ), std::move( second_expr ) ) );
+		unary_expr = new BinaryExpression( tok, unary_expr, second_expr );
 	}
 }
 
-std::unique_ptr<Statement> Parser::ParseDeclaration( Scope *parent_scope, ScannerTokenType def )
+Declaration* Parser::ParseDeclaration( Scope *parent_scope )
 {
-	NextToken(); // consume keyword 'var'
-	Scope::list_of_sptrs<Declaration> declaration_list{};
-	std::unique_ptr<Declaration> declaration{};
+	AccessType access_type = AccessType::NONE;
+	StorageType storage_type = StorageType::NONE;
+	ScannerTokenType tt = CurrentToken().GetType();
 
-	AccessType access_type = DetermineAccessType( def );
+	switch ( tt ){
+	case ScannerTokenType::TOKEN_PRIVATE_ID:
+		access_type = AccessType::PRIVATE_ACCESS;
+		NextToken();
+		break;
+	case ScannerTokenType::TOKEN_PUBLIC_ID:
+		access_type = AccessType::PUBLIC_ACCESS;
+		NextToken();
+		break;
+	case ScannerTokenType::TOKEN_PROTECTED_ID:
+		access_type = AccessType::PROTECTED_ACCESS;
+		NextToken();
+		break;
+	default:;
+	}
+
+	if ( CurrentToken().GetType() == ScannerTokenType::TOKEN_STATIC_ID ||
+		CurrentToken().GetType() == ScannerTokenType::TOKEN_EXTERN_ID ){
+		storage_type = CurrentToken().GetType() == ScannerTokenType::TOKEN_STATIC_ID ? StorageType::STATIC_STORAGE :
+			StorageType::EXTERN_STORAGE;
+		NextToken(); // consume 'extern' or 'static'
+	}
+
+	if ( Match( ScannerTokenType::TOKEN_SEMI_COLON ) && storage_type != StorageType::NONE && access_type != AccessType::NONE ){
+		ProcessError( L"access or storage specifier cannot be used here" );
+	}
+
+	switch ( CurrentToken().GetType() ){
+	case ScannerTokenType::TOKEN_CLASS_ID:
+	case ScannerTokenType::TOKEN_STRUCT_ID:
+		return ParseClass( parent_scope, access_type, storage_type );
+
+	case ScannerTokenType::TOKEN_FUNC_ID:
+	case ScannerTokenType::TOKEN_METHOD_ID:
+	case ScannerTokenType::TOKEN_CONSTRUCT_ID: {
+		auto type = CurrentToken().GetType();
+		FunctionType function_type = type == ScannerTokenType::TOKEN_FUNC_ID ? FunctionType::FUNCTION :
+			type == ScannerTokenType::TOKEN_METHOD_ID ? FunctionType::METHOD : FunctionType::CONSTRUCTOR;
+
+		return ParseFunction( parent_scope, function_type, access_type, storage_type );
+	}
+	case ScannerTokenType::TOKEN_SEMI_COLON:
+		return ParseEmptyStatement( parent_scope );
+	case ScannerTokenType::TOKEN_VAR_ID:
+	case ScannerTokenType::TOKEN_CONST_ID:
+		return ParseVariableDeclaration( parent_scope, access_type, storage_type );
+	default:
+		ProcessError( L"Unrecognized token" );
+	}
+}
+
+Declaration* Parser::ParseVariableDeclaration( Scope *parent_scope, AccessType access_type, StorageType storage )
+{
+	bool const is_const = CurrentToken().GetType() == ScannerTokenType::TOKEN_CONST_ID;
+	NextToken(); // consume 'var' or 'const'
+	std::vector<Declaration*> decl_list{};
+	Token token = CurrentToken();
+
+	auto clear_container = [] ( std::vector<Declaration*> decl_list ){
+		if ( !decl_list.empty() ){
+			for ( Declaration* decl : decl_list ){
+				delete decl;
+				decl = nullptr;
+			}
+		}
+		decl_list.clear();
+	};
 
 	do {
-		Token const token = CurrentToken();
 		if ( !Match( ScannerTokenType::TOKEN_IDENT ) ){
-			ProcessError( L"Expected a variable name" );
+			ProcessError( L"expected an valid identifier" );
+			clear_container( decl_list );
 			return nullptr;
 		}
-		std::wstring const variable_name = CurrentToken().GetIdentifier();
-		NextToken(); // consume variable name
-		std::unique_ptr<Expression> expr{};
+		token = CurrentToken();
+
+		NextToken(); // consume the identifier
+		Expression* assignment_expr{};
+
 		if ( Match( ScannerTokenType::TOKEN_ASSIGN ) ){
 			NextToken(); // consume '='
-			expr = ParseExpression();
+			assignment_expr = ParseExpression();
+			if ( !assignment_expr ){
+				clear_container( decl_list );
+				return nullptr;
+			}
 		}
-		declaration.reset( new Declaration( token.GetFileName(), token.GetLineNumber(), variable_name,
-			std::move( expr ), access_type ) );
-		if ( !Match( ScannerTokenType::TOKEN_COMMA ) ) break;
-		NextToken(); // consume ','
-		declaration_list.push_back( std::move( declaration ) );
+		Declaration* decl{ new VariableDeclaration( token, token.GetIdentifier(), std::move( assignment_expr ), is_const ) };
+		if ( Match( ScannerTokenType::TOKEN_COMMA ) ){
+			NextToken(); // consume ','
+		}
+		decl_list.push_back( std::move( decl ) );
 	} while ( !Match( ScannerTokenType::TOKEN_END_OF_STREAM ) && !Match( ScannerTokenType::TOKEN_SEMI_COLON ) );
-	if ( !Match( ScannerTokenType::TOKEN_SEMI_COLON ) ){
-		ProcessError( L"Expected a semi-colon at the end of the variable declaration(s)" );
-	}
-	else {
-		NextToken(); // consume ';'
-	}
-	bool is_decl_list = declaration_list.size() != 0;
-	return is_decl_list ? TreeFactory::MakeDeclarationList( CurrentToken(), std::move( declaration_list ) ) :
-		TreeFactory::MakeDeclaration( std::move( declaration ) );
+	return new DeclarationList( token.GetFileName(), token.GetLineNumber(), std::move( decl_list ) );
+}
+
+Declaration* Parser::ParseEmptyStatement( Scope * )
+{
+	auto token = CurrentToken();
+	NextToken(); // consume ';'
+	return new EmptyStatement( token.GetFileName(), token.GetLineNumber() );
 }

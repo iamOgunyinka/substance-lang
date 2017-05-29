@@ -8,27 +8,30 @@ namespace compiler {
 	class ParsedProgram;
 	class Scope;
 
-	class SemaCheck
+	class SemaCheck1
 	{
 		std::vector<std::wstring>	error_messages;
-		Scope						*current_scope;
-		bool						parsingIteration;
-		bool						parsingSelection;
+		public:
+		SemaCheck1();
+		~SemaCheck1() = default;
 
-	private:
-		/*
-		void Visit( std::unique_ptr<Statement> & statement );
-		void Visit( std::unique_ptr<Expression> & expr );
-		*/
-	public:
-		SemaCheck();
-		~SemaCheck() = default;
-		
-		bool Visit( std::unique_ptr<compiler::ParsedProgram> & parsed_program );
+		bool Visit( compiler::ParsedProgram* program );
+		void AnalyzeScope( Scope* );
 		void ReportErrors();
 		
 		void AppendError( std::wstring const & );
 		
+	};
+
+	class SemaCheck2
+	{
+		Scope						*current_scope;
+		bool						parsingIteration;
+		bool						parsingSelection;
+	public:
+		SemaCheck2();
+		void ReportErrors();
+
 		inline bool IsParsingIteration(){ return parsingIteration; }
 		inline bool IsParsingSelection(){ return parsingSelection; }
 		inline Scope*  GetCurrentScope(){ return current_scope; }
@@ -39,5 +42,10 @@ namespace compiler {
 		void SetParsingSelection( bool flag ){
 			parsingSelection = flag;
 		}
+		void SetCurrentScope( Scope *scope ){
+			current_scope = scope;
+		}
+
+		bool Visit( compiler::ParsedProgram* parsed_program );
 	};
 }

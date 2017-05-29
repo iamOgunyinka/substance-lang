@@ -60,6 +60,7 @@ Scanner::~Scanner()
 void Scanner::LoadKeywords()
 {
 	ident_map[ L"var" ] = ScannerTokenType::TOKEN_VAR_ID;
+	ident_map[ L"const" ] = ScannerTokenType::TOKEN_CONST_ID;
 	ident_map[ L"if" ] = ScannerTokenType::TOKEN_IF_ID;
 	ident_map[ L"else" ] = ScannerTokenType::TOKEN_ELSE_ID;
 	ident_map[ L"switch" ] = ScannerTokenType::TOKEN_SWITCH_ID;
@@ -77,6 +78,7 @@ void Scanner::LoadKeywords()
 	ident_map[ L"break" ] = ScannerTokenType::TOKEN_BREAK_ID;
 	ident_map[ L"continue" ] = ScannerTokenType::TOKEN_CONTINUE_ID;
 	ident_map[ L"class" ] = ScannerTokenType::TOKEN_CLASS_ID;
+	ident_map[ L"struct" ] = ScannerTokenType::TOKEN_STRUCT_ID;
 	ident_map[ L"construct" ] = ScannerTokenType::TOKEN_CONSTRUCT_ID;
 	ident_map[ L"function" ] = ScannerTokenType::TOKEN_FUNC_ID;
 	ident_map[ L"method" ] = ScannerTokenType::TOKEN_METHOD_ID;
@@ -88,6 +90,9 @@ void Scanner::LoadKeywords()
 	ident_map[ L"false" ] = ScannerTokenType::TOKEN_FALSE_LIT;
 	ident_map[ L"new" ] = ScannerTokenType::TOKEN_NEW;
 	ident_map[ L"null" ] = ScannerTokenType::TOKEN_NULL;
+	ident_map[ L"scope" ] = ScannerTokenType::TOKEN_SCOPE;
+	ident_map[ L"extern" ] = ScannerTokenType::TOKEN_EXTERN_ID;
+	ident_map[ L"loop" ] = ScannerTokenType::TOKEN_LOOP_ID;
 }
 
 /****************************

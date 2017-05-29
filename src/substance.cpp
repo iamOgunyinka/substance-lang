@@ -15,22 +15,34 @@
 */
 
 int main( int argc, const char* argv [] ) {
-	if ( argc == 2 ) {
+	if ( argc == 1 ) {
 		
 		using compiler::Parser;
 		using compiler::ParsedProgram;
-		//using compiler::SemaCheck;
+		using compiler::SemaCheck1;
+		using compiler::SemaCheck2;
 
-		Parser parser( BytesToUnicode( argv[1] ) );
+		char const *filename = "C:\\Users\\Josh\\Documents\\Visual Studio 2013\\Projects\\substance_test\\Debug\\tests\\regress0.sub";
+
+		Parser parser( BytesToUnicode( filename ) );
 		std::unique_ptr<ParsedProgram> parsed_program{ parser.Parse() };
 		
 		if ( parsed_program ) {
-				/*
-			auto sema = SemaCheck{};
-			bool passed_sema_check = parsed_program->Visit( sema );
-			if ( !passed_sema_check ){
-				sema.ReportErrors();
+			// all non-local variable declarations
+			SemaCheck1 non_local_decl_sema{};
+			if ( !parsed_program->Visit( non_local_decl_sema ) ){
+				non_local_decl_sema.ReportErrors();
+				return -1;
 			}
+
+			// all local declarations
+			SemaCheck2 local_decl_sema{};
+			if ( !parsed_program->Visit( local_decl_sema ) ){
+				local_decl_sema.ReportErrors();
+				return -1;
+			}
+
+			/*
 			compiler::Emitter emitter{ std::move( parsed_program ) };
 			std::unique_ptr<ExecutableProgram> executable_program{ emitter.Emit() };
 			if ( executable_program ) {
@@ -45,5 +57,5 @@ int main( int argc, const char* argv [] ) {
 		}
 	}
 
-	return 1;
+	return 0;
 }

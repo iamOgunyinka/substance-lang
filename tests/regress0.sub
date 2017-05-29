@@ -1,92 +1,32 @@
-x = 9/3;
-show x;
+static function testing( first_arg, second_arg )
+{
+	for each( a in [ 1, 2, 3, 4, 5, 9 ] ){
+		show a;
+	}
+	foreach( b in { "a": 1, 1 + 1 : Foo(), Foo() : "Me" } ){
+		show b.key();
+		show b.value();
+	}
+	
+	for each( s in {} ){}
+	foreach( iter in [] ){
+		// do nothing
+	}
+	var c = @{ return @( a ){ return 12 * first_arg + second_arg; }; };
+	show c()( 15 );
+}
 
-x = 3-9;
-show x;
-
-a = 70;
-x = a / 2;
-show x;
-
-x = 4 * a;
-show x;
-
-x = 9 - a;
-show x;
-
-x = a - 9;
-show x;
-
-x = 9 + a;
-show x;
-
-x = a + 9;
-show x;
-
-x = 9 / a;
-show x;
-
-x = a / 9;
-show x;
-
-x = 9 * a;
-show x;
-
-x = a * 9;
-show x;
-
-x = 9 % a;
-show x;
-
-x = a % 9;
-show x;
-
-b = 13;
-x = a-b;
-show x;
-
-x = b-a;
-show x;
-
-x = 13.5 - 5.0;
-show x;
-
-x = 9.33 - b;
-show x;
-
-x = b/9.33;
-show x;
-
-x = 9.33/b;
-show x;
-
-x = b+9.33;
-show x;
-
-x = 9.33 + b;
-show x;
-
-x = b*9.33;
-show x;
-
-x = 9.33*b;
-show x;
-
-g = 3;
-c = 3.1415;
-x = c-5.5;
-show x;
-
-d = 11.12;
-h = 11;
-x = c-d;
-show x;
-
-x = d-c;		
-show x;
-
-x = g-h;
-show x;
-
-x = h-g;
-show x;
+function main()
+{
+	c = 12;
+	do {
+		testing( c , c + 1 );
+		--c;
+	} while( c <= 1 );
+	c += 10;
+	while( c <= 100 ){
+		show c;
+		c = c + 2;
+	}
+	show testing( c, 11 );
+}

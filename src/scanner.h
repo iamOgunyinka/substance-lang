@@ -87,10 +87,14 @@ namespace compiler {
 		TOKEN_IDENT,
 		TOKEN_VAR_ID,
 		TOKEN_CLASS_ID,
+		TOKEN_STRUCT_ID,
 		TOKEN_PUBLIC_ID,
 		TOKEN_PRIVATE_ID,
 		TOKEN_PROTECTED_ID,
 		TOKEN_STATIC_ID,
+		TOKEN_EXTERN_ID,
+		TOKEN_CONST_ID,
+		TOKEN_SCOPE,
 		// control
 		TOKEN_IF_ID,
 		TOKEN_ELSE_ID,
@@ -107,6 +111,7 @@ namespace compiler {
 		TOKEN_SELF_ID,
 		TOKEN_BREAK_ID,
 		TOKEN_CONTINUE_ID,
+		TOKEN_LOOP_ID,
 		TOKEN_RETURN_ID // end keywords
 	};
 
@@ -116,10 +121,10 @@ namespace compiler {
 	class Token {
 		ScannerTokenType	token_type;
 		std::wstring		ident;
-		unsigned int		line_num;
 		std::wstring		file_name;
 
 		INT_T				int_lit;
+		unsigned int		line_num;
 		FLOAT_T				double_lit;
 		CHAR_T				char_lit;
 		BYTE_T				byte_lit;
