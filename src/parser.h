@@ -76,7 +76,7 @@ namespace compiler {
 		void LoadErrorCodes();
 		void ProcessError( const ScannerTokenType type );
 		void ProcessError( const wstring &msg );
-		void ProcessError( const wstring &msg, ParseNode* node );
+		void ProcessError( const wstring &msg, std::wstring const &, unsigned int const );
 		void ProcessError( const wstring &msg, const ScannerTokenType sync );
 		bool NoErrors();
 
@@ -94,7 +94,7 @@ namespace compiler {
 		Declaration*	ParseFunction( Scope *parent_scope, FunctionType func_type, AccessType, StorageType );
 		Declaration*	ParseVariableDeclaration( Scope *parent_scope, AccessType, StorageType );
 		Declaration*	ParseDeclaration( Scope *parent_scope );
-		Declaration*	ParseEmptyStatement( Scope * );
+		Statement*		ParseEmptyStatement( Scope * );
 
 		Statement*		ParseLabelledStatement( Scope *parent );
 		Statement*		ParseExpressionStatement();
@@ -111,10 +111,7 @@ namespace compiler {
 		Expression*		ParseListExpression();
 		Expression*		ParseDictionaryExpression();
 	public:
-		Parser( const wstring &input ){
-			this->input = input;
-			this->scanner.reset( new Scanner( input ) );
-			this->local_count = -1;
+		Parser( const wstring &in ): input( in ), scanner( new Scanner( input )), local_count( - 1 ){
 			LoadErrorCodes();
 		}
 

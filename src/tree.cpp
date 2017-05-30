@@ -31,6 +31,7 @@ bool GenericAdder( std::wstring const & name, Container<Element> & container, El
 }
 
 void Scope::AddStatement( Statement* statement ){
+	std::cout << statement->GetLineNumber() << std::endl;
 	statements.push_back( statement );
 }
 
@@ -38,9 +39,12 @@ Scope::list_of_ptrs<Statement>& Scope::GetStatements(){
 	return statements;
 }
 
-bool Scope::AddDeclaration( Declaration *declaration )
+bool Scope::AddDeclaration( Declaration *decl )
 {
-	return declarations->AddDeclaration( declaration );
+	if ( !declarations ){ // perhaps the first declaration, makes sense to use the filename and line number
+		declarations = new DeclarationList( decl->GetFileName(), decl->GetLineNumber() );
+	}
+	return declarations->AddDeclaration( decl );
 }
 
 int Scope::LocalCount() const { return local_count; }
@@ -57,7 +61,7 @@ Declaration* Scope::FindDeclaration( std::wstring const & identifier )
 	return nullptr;
 }
 
-bool DeclarationList::AddDeclaration( Declaration* declaration ){
+bool DeclarationList::AddDeclaration( Declaration * declaration ){
 	auto find_decl_iter = std::find_if( declarations.begin(), declarations.end(), [ &declaration ]( Declaration* decl ){
 		return decl->GetName() == declaration->GetName();
 	} );
@@ -66,8 +70,8 @@ bool DeclarationList::AddDeclaration( Declaration* declaration ){
 		return true;
 	}
 	if ( declaration->GetStatementType() == StatementType::FUNCTION_DECL_STMT ){
-		FunctionDeclaration *func_decl = dynamic_cast< FunctionDeclaration* >( declaration );
-		unsigned int const param_count = func_decl->GetParameters()->Length();
+		FunctionDeclaration const *func_decl = dynamic_cast< FunctionDeclaration const * >( declaration );
+		unsigned int const param_count = func_decl->GetParameters() ? func_decl->GetParameters()->Length() : 0;
 		std::wstring const & function_name = func_decl->GetName();
 
 		DeclarationList::declaration_list_t::iterator overloaded_func_iter = std::find_if( 
@@ -76,7 +80,7 @@ bool DeclarationList::AddDeclaration( Declaration* declaration ){
 			return decl->GetName() == function_name && func && func->GetParameters()->Length() == param_count;
 		} );
 		if ( overloaded_func_iter == declarations.end() ){
-			declarations.push_back( std::move( declaration ) );
+			declarations.push_back( declaration );
 			return true;
 		}
 	}
@@ -92,14 +96,6 @@ Scope::Scope( Scope * p ): parent( p ), local_count( 0 ){
 }
 
 Scope::~Scope(){
-	if ( declarations ){
-		for ( Declaration *decl : declarations->GetDeclarations() ){
-			delete decl;
-			decl = nullptr;
-		}
-		delete declarations;
-		declarations = nullptr;
-	}
 	for ( Statement *statement : statements ){
 		if ( statement ){
 			delete statement;

@@ -1,6 +1,6 @@
 <<<<<<< HEAD
-.sdf
-.exe
+*.sdf
+*.exe
 src/.vscode
 src/msvc/Debug
 

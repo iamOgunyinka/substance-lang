@@ -129,11 +129,12 @@ namespace compiler {
 		CHAR_T				char_lit;
 		BYTE_T				byte_lit;
 	public:
+		Token() = default;
 		inline const std::wstring GetFileName() const {
 			return file_name;
 		}
 
-		inline void SetFileName( std::wstring f ) {
+		inline void SetFileName( std::wstring const & f ) {
 			file_name = f;
 		}
 
@@ -161,7 +162,7 @@ namespace compiler {
 			char_lit = c;
 		}
 
-		inline void SetIdentifier( std::wstring i ) {
+		inline void SetIdentifier( std::wstring const &i ) {
 			ident = i;
 		}
 

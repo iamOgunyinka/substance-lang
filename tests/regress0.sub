@@ -10,23 +10,36 @@ static function testing( first_arg, second_arg )
 	
 	for each( s in {} ){}
 	foreach( iter in [] ){
-		// do nothing
+		//do nothing
 	}
 	var c = @{ return @( a ){ return 12 * first_arg + second_arg; }; };
 	show c()( 15 );
 }
 
-function main()
+var global_var = 12, global_lambda = @( a ){ show a; };
+
+show global_lambda( global_var );
+
+c = 12; // a variable declaration
+
+//expects no error, same name but different parameter size
+static function testing( first_arg )
 {
-	c = 12;
+}
+
+// Error.
+static function testing( another_arg ){
+}
+
+function main( a )
+{
 	do {
 		testing( c , c + 1 );
 		--c;
 	} while( c <= 1 );
-	c += 10;
+	c += 10; // uses the global variable c
 	while( c <= 100 ){
 		show c;
 		c = c + 2;
 	}
-	show testing( c, 11 );
 }
