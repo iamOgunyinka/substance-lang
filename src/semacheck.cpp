@@ -30,7 +30,8 @@ namespace compiler
 				std::wstring const type_name = type == StatementType::FUNCTION_DECL_STMT ? L"function '" :
 					type == StatementType::CLASS_DECL_STMT ? L"class '" : L"variable '";
 				if ( !scope->AddDeclaration( decl ) ){
-					error_messages.push_back( type_name + decl->GetName() + L"' redeclared here." );
+					error_messages.push_back( type_name + decl->GetName() + L"' redeclared here on line " +
+						IntToString( decl->GetLineNumber() ) );
 				}
 				break;
 			}

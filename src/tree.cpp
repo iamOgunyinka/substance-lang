@@ -31,7 +31,6 @@ bool GenericAdder( std::wstring const & name, Container<Element> & container, El
 }
 
 void Scope::AddStatement( Statement* statement ){
-	std::cout << statement->GetLineNumber() << std::endl;
 	statements.push_back( statement );
 }
 
