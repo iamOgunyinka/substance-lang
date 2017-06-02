@@ -94,7 +94,7 @@ namespace compiler {
 		TOKEN_STATIC_ID,
 		TOKEN_EXTERN_ID,
 		TOKEN_CONST_ID,
-		TOKEN_SCOPE,
+		TOKEN_BLOCK,
 		// control
 		TOKEN_IF_ID,
 		TOKEN_ELSE_ID,

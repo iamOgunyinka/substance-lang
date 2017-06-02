@@ -28,6 +28,7 @@ namespace compiler {
 		Scope						*current_scope;
 		bool						parsingIteration;
 		bool						parsingSelection;
+		std::vector<std::wstring>	error_messages;
 	public:
 		SemaCheck2();
 		void ReportErrors();

@@ -311,7 +311,7 @@ namespace compiler {
 	private:
 		std::vector<expression_ptr_pair_t> list_of_expressions;
 	public:
-		MapExpression( std::wstring const & filename, unsigned int const line_number, std::vector<expression_ptr_pair_t> list ) :
+		MapExpression( std::wstring const & filename, unsigned int const line_number, std::vector<expression_ptr_pair_t> && list ) :
 			Expression( filename, line_number ), list_of_expressions( std::move( list ) ){
 		}
 		ExpressionType const GetExpressionType() override {
@@ -484,7 +484,7 @@ namespace compiler {
 		list_of_ptrs<Statement>	statements;		// statements for that scope
 		ScopeType				type;
 	public:
-		Scope( Scope * );
+		explicit Scope( Scope * );
 		~Scope();
 		Scope*	GetParentScope();
 		void	SetParentScope( Scope *parent_scope );
@@ -494,7 +494,7 @@ namespace compiler {
 		int		LocalCount() const;
 		void	SetLocalCount( int count );
 
-		DeclarationList*			GetDeclarations();
+		DeclarationList*			GetDeclarationList();
 		list_of_ptrs<Statement>&	GetStatements();
 		Declaration*				FindDeclaration( std::wstring const & identifier );
 	};
@@ -520,10 +520,27 @@ namespace compiler {
 
 	class Declaration : public Statement {
 		std::wstring name;
+		StorageType  storage;
+		AccessType   access;
 	public:
 		Declaration( const std::wstring &file_name, const unsigned int line_num,
 			std::wstring const &ident = {} ) : Statement( file_name, line_num ),
-			name( ident ) {
+			name( ident ), storage( StorageType::NONE ), access( AccessType::NONE) {
+		}
+
+		void SetStorageType( StorageType type ){
+			storage = type;
+		}
+		StorageType GetStorageType() const {
+			return storage;
+		}
+		
+		void SetAccessType( AccessType type ){
+			access = type;
+		}
+
+		AccessType GetAccessType() const {
+			return access;
 		}
 
 		void SetName( std::wstring const & name_ ){
@@ -540,19 +557,19 @@ namespace compiler {
 	class DeclarationList : public Declaration
 	{
 	public:
-		using declaration_list_t = std::vector<Declaration*>;
+		using declaration_list_t = std::unordered_multimap<std::wstring, Declaration*>;
 	private:
 		declaration_list_t declarations;
 	public:
 
-		DeclarationList( std::wstring const & filename, unsigned int const line_number, declaration_list_t decl_list = {} ) :
+		DeclarationList( std::wstring const & filename, unsigned int const line_number, declaration_list_t && decl_list = {} ) :
 			Declaration( filename, line_number ), declarations( std::move( decl_list ) ){
 		}
 		~DeclarationList(){
-			for ( Declaration *decl : declarations ){
-				if ( decl ){
-					delete decl;
-					decl = nullptr;
+			for ( std::pair< std::wstring const, Declaration*> &decl : declarations ){
+				if ( decl.second ){
+					delete decl.second;
+					decl.second = nullptr;
 				}
 			}
 			declarations.clear();
@@ -954,7 +971,7 @@ namespace compiler {
 		Expression*	lhs;
 		Expression* rhs;
 	public:
-		BinaryExpression( Token const tok, Expression* lhs_expression, Expression* rhs_expression ) :
+		BinaryExpression( Token const & tok, Expression* lhs_expression, Expression* rhs_expression ) :
 			Expression( token.GetFileName(), token.GetLineNumber() ),
 			token( tok ), lhs( lhs_expression ), rhs( rhs_expression ){
 		}
@@ -983,7 +1000,7 @@ namespace compiler {
 	 ****************************/
 	class AssignmentExpression : public BinaryExpression {
 	public:
-		AssignmentExpression( Token const tok, Expression* lhs_expression, Expression* rhs_expression ) :
+		AssignmentExpression( Token const & tok, Expression* lhs_expression, Expression* rhs_expression ) :
 			BinaryExpression( tok, lhs_expression, rhs_expression ){
 		}
 
@@ -1008,7 +1025,8 @@ namespace compiler {
 	{
 		std::wstring const variable_name;
 	public:
-		Variable( Token const &tok ) : Expression( tok.GetFileName(), tok.GetLineNumber() ), variable_name( tok.GetIdentifier() ){
+		explicit Variable( Token const &tok ) : Expression( tok.GetFileName(), tok.GetLineNumber() ), 
+			variable_name( tok.GetIdentifier() ){
 		}
 
 		Variable( std::wstring const & filename, unsigned int const line_number, std::wstring const & identifier ) :
@@ -1130,7 +1148,7 @@ namespace compiler {
 		Token const	variable_id;
 		Expression* expression;
 	public:
-		DotExpression( std::wstring const & filename, unsigned int const line_number, Token const id, Expression* expr )
+		DotExpression( std::wstring const & filename, unsigned int const line_number, Token const & id, Expression* expr )
 			: PostfixExpression( filename, line_number ), variable_id( id ), expression( expr ){
 		}
 		~DotExpression(){
@@ -1364,8 +1382,6 @@ namespace compiler {
 
 	class ClassDeclaration : public Declaration {
 		bool				is_struct_;
-		AccessType			access;
-		StorageType			storage;
 		std::wstring		base_class_name;
 		DeclarationList*	decl_list;		// functions, methods, variables, ctors;
 		unsigned int		instance_variable_count;
@@ -1373,16 +1389,12 @@ namespace compiler {
 	public:
 		ClassDeclaration( const std::wstring &file_name, const unsigned int line_num, const std::wstring &name,
 			Scope *, bool is_struct ) :Declaration( file_name, line_num, name ), is_struct_( is_struct ),
-			access(AccessType::NONE), storage(StorageType::NONE), decl_list( nullptr ),
+			decl_list( new DeclarationList( file_name, line_num ) ),
 			instance_variable_count(0), static_variable_count( 0 )
 		{
 		}
 		~ClassDeclaration(){
 			if ( decl_list ){
-				for ( Declaration *declaration : decl_list->GetDeclarations() ){
-					delete declaration;
-					declaration = nullptr;
-				}
 				delete decl_list;
 			}
 			decl_list = nullptr;
@@ -1422,7 +1434,7 @@ namespace compiler {
 		}
 
 	public:
-		ParsedProgram(){
+		ParsedProgram(): global_scope( nullptr ){
 		}
 
 		~ParsedProgram(){
@@ -1494,7 +1506,7 @@ namespace compiler {
 			return expression_statement;
 		}
 
-		static Expression* MakeAssignmentExpression( Token const token, Expression* lhs_expression,
+		static Expression* MakeAssignmentExpression( Token const & token, Expression* lhs_expression,
 			Expression* rhs_expression )
 		{
 			Expression* assign_expr{ new AssignmentExpression( token, lhs_expression, rhs_expression ) };
@@ -1575,10 +1587,10 @@ namespace compiler {
 			return list_expression;
 		}
 
-		static Expression* MakeMapExpression( Token const & tok, std::vector<MapExpression::expression_ptr_pair_t>
+		static Expression* MakeMapExpression( Token const & tok, std::vector<MapExpression::expression_ptr_pair_t> &&
 			list )
 		{
-			Expression* map_expression{ new MapExpression( tok.GetFileName(), tok.GetLineNumber(), list ) };
+			Expression* map_expression{ new MapExpression( tok.GetFileName(), tok.GetLineNumber(), std::move( list ) ) };
 			return map_expression;
 		}
 

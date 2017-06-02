@@ -85,15 +85,14 @@ void Parser::ProcessError( const wstring &msg, ScannerTokenType sync )
 /****************************
  * Emits parsing error
  ****************************/
-void Parser::ProcessError( const wstring &msg, std::wstring const & filename, unsigned int const line_number )
+void Parser::ProcessError( const wstring &msg, unsigned int const line_number )
 {
 #ifdef _DEBUG
-	wcout << L"\tError: " << filename << L":" << line_number
-		<< L": " << msg << endl;
+	wcout << L"\tError: " << GetFileName() << L":" << line_number << L": " << msg << endl;
 #endif
 
 	const wstring &str_line_num = ToString( line_number );
-	errors.insert( { line_number, filename + L":" + str_line_num + L": " + msg } );
+	errors.insert( { line_number, GetFileName() + L":" + str_line_num + L": " + msg } );
 }
 
 /****************************
@@ -174,9 +173,9 @@ std::unique_ptr<ParsedProgram> Parser::Parse()
 	std::unique_ptr<ParsedProgram> program{ new ParsedProgram };
 	auto program_scope = ParseScope( program->GetGlobalScope() );
 	if ( !program_scope ){
-		ProcessError( L"Fatal error. Unable to parse program." );
-		std::exit( -1 );
+		return nullptr;
 	}
+	program_scope->SetScopeType( ScopeType::NAMESPACE_SCOPE );
 	program->SetConstructs( program_scope );
 	if ( NoErrors() ) {
 		return program;
@@ -199,10 +198,10 @@ Declaration* Parser::ParseClass( Scope *parent_scope, AccessType access_type, St
 	}
 
 #ifdef _DEBUG
-	Show( L"Class: name='" + scanner->GetToken()->GetIdentifier() + L"'", 2 );
+	std::wcout << L"Class: name='" + scanner->GetToken()->GetIdentifier() + L"'\n";
 #endif
 
-	auto klass = new ClassDeclaration( file_name, line_num, CurrentToken().GetIdentifier(), parent_scope, is_struct );
+	ClassDeclaration *klass = new ClassDeclaration( file_name, line_num, CurrentToken().GetIdentifier(), parent_scope, is_struct );
 	NextToken(); // consume class name
 
 	// we have a base/super class
@@ -225,14 +224,26 @@ Declaration* Parser::ParseClass( Scope *parent_scope, AccessType access_type, St
 		return nullptr;
 	}
 	NextToken(); // consume '{'
-	Declaration* declaration = ParseDeclaration( parent_scope );
-
-	while ( declaration ){
-		if ( klass->AddDeclaration( std::move( declaration ) ) ){
-			ProcessError( L"Unable to add declaration" );
+	while ( !Match( ScannerTokenType::TOKEN_CLOSED_BRACE ) && !Match( ScannerTokenType::TOKEN_END_OF_STREAM ) ){
+		Declaration *decl = ParseDeclaration( parent_scope );
+		if ( !decl ){
+			delete klass;
+			klass = nullptr;
+			return klass;
 		}
-		declaration = ParseDeclaration( parent_scope );
+		if ( !klass->AddDeclaration( decl ) ){
+			ProcessError( L"'" + decl->GetName() + L"' already exist in this scope", decl->GetLineNumber() );
+		}
 	}
+	if ( !Match( ScannerTokenType::TOKEN_CLOSED_BRACE ) ){
+		ProcessError( L"Expected a closing brace at the end of class declaration." );
+		delete klass;
+		klass = nullptr;
+		return klass; // klass is nullptr
+	}
+	NextToken(); // consume '}'
+	klass->SetStorageType( storage_type );
+	klass->SetAccessType( access_type );
 	return klass;
 }
 
@@ -279,57 +290,45 @@ Declaration* Parser::ParseFunction( Scope *parent_scope, FunctionType function_t
 	NextToken();
 
 #ifdef _DEBUG
-	Show( stype + L": name='" + function_name + L"'", 2 );
+	std::wcout << stype + L": name='" + function_name + L"'\n";
 #endif
 
 	ExpressionList* parameters{};
 
-	// methods w/o parameters are allowed to NOT have opening and closing parenthesis
 	if ( !Match( ScannerTokenType::TOKEN_OPEN_PAREN ) ){
-		if ( function_type != FunctionType::METHOD ){
-			ProcessError( ScannerTokenType::TOKEN_OPEN_PAREN );
-			/**************************************************************************
-			*	let's see if we can re-construct this function tree, user maybe thought
-			*	functions/constructors are also allowed to have optional parenthesis
-			*	consume every token in our way up-to but not including the function body '{'
-			***************************************************************************/
-			while ( !Match( ScannerTokenType::TOKEN_END_OF_STREAM ) && !Match( ScannerTokenType::TOKEN_OPEN_BRACE ) ){
-				NextToken();
-			}
-		}
+		ProcessError( L"Expected an open parenthesis for (possibly empty) parameters." );
+		return nullptr;
 	}
-	else {
-		NextToken(); // consume '('
-		if ( !Match( ScannerTokenType::TOKEN_CLOSED_PAREN ) ){
-			parameters = new ExpressionList( file_name, line_num );
-		}
-		while ( ScannerTokenType::TOKEN_END_OF_STREAM != CurrentToken().GetType() && !Match( ScannerTokenType::TOKEN_CLOSED_PAREN ) ){
-			Expression* expr{ ParseExpression() };
-			if ( !expr ){
-				delete parameters;
-				parameters = nullptr;
-
-				ProcessError( L"Could not process parameters to functions." );
-				return nullptr;
-			}
-			parameters->AddExpression( expr );
-			if ( Match( ScannerTokenType::TOKEN_COMMA ) ) {
-				NextToken(); // consume ','
-				if ( Match( ScannerTokenType::TOKEN_CLOSED_PAREN ) ) {
-					ProcessError( L"Expected expression", CurrentToken().GetFileName(), CurrentToken().GetLineNumber() );
-				}
-			}
-		}
-		if ( !Match( ScannerTokenType::TOKEN_CLOSED_PAREN ) ){
-			ProcessError( ScannerTokenType::TOKEN_CLOSED_PAREN );
-
+	NextToken(); // consume '('
+	if ( !Match( ScannerTokenType::TOKEN_CLOSED_PAREN ) ){
+		parameters = new ExpressionList( file_name, line_num );
+	}
+	while ( !Match( ScannerTokenType::TOKEN_END_OF_STREAM ) && !Match( ScannerTokenType::TOKEN_CLOSED_PAREN ) ){
+		Expression* expr{ ParseExpression() };
+		if ( !expr ){
 			delete parameters;
 			parameters = nullptr;
 
+			ProcessError( L"Could not process parameters to functions." );
 			return nullptr;
 		}
-		NextToken(); // consume ')'
+		parameters->AddExpression( expr );
+		if ( Match( ScannerTokenType::TOKEN_COMMA ) ) {
+			NextToken(); // consume ','
+			if ( Match( ScannerTokenType::TOKEN_CLOSED_PAREN ) ) {
+				ProcessError( L"Expected an expression before a closing parenthesis", CurrentToken().GetLineNumber() );
+			}
+		}
 	}
+	if ( !Match( ScannerTokenType::TOKEN_CLOSED_PAREN ) ){
+		ProcessError( ScannerTokenType::TOKEN_CLOSED_PAREN );
+
+		delete parameters;
+		parameters = nullptr;
+
+		return nullptr;
+	}
+	NextToken(); // consume ')'
 
 	// let's parse the function body
 	CompoundStatement* function_body = ParseCompoundStatement( parent_scope );
@@ -339,9 +338,11 @@ Declaration* Parser::ParseFunction( Scope *parent_scope, FunctionType function_t
 
 		return nullptr;
 	}
+	function_body->GetScope()->SetScopeType( ScopeType::FUNCTION_SCOPE );
 
 	FunctionDeclaration* function{ new FunctionDeclaration( file_name, line_num, function_name, std::move( parameters ) ) };
-	function->SetFunctionBody( std::move( function_body ) );
+	function->SetFunctionBody( function_body );
+	function->SetFunctionType( function_type );
 	function->SetAccess( access );
 	function->SetStorageType( storage );
 	return function;
@@ -374,7 +375,13 @@ Scope* Parser::ParseScope( Scope *parent_scope )
 {
 	Scope* scope{ new Scope( parent_scope ) };
 	while ( !Match( ScannerTokenType::TOKEN_END_OF_STREAM ) && !Match( ScannerTokenType::TOKEN_CLOSED_BRACE ) ) {
-		scope->AddStatement( ParseStatement( parent_scope ) );
+		Statement* statement = ParseStatement( parent_scope );
+		if ( !statement ) {
+			delete scope;
+			scope = nullptr;
+			return scope;
+		}
+		scope->AddStatement( statement );
 	}
 	return scope;
 }
@@ -387,8 +394,8 @@ Statement* Parser::ParseStatement( Scope *parent_scope )
 	case ScannerTokenType::TOKEN_ELSE_ID:
 		return ParseLabelledStatement( parent_scope );
 
-	case ScannerTokenType::TOKEN_SCOPE:
-		NextToken(); // consume 'scope'
+	case ScannerTokenType::TOKEN_BLOCK:
+		NextToken(); // consume 'block'
 		return ParseCompoundStatement( parent_scope );
 
 	case ScannerTokenType::TOKEN_FOR_EACH_ID:
@@ -617,7 +624,7 @@ Statement* Parser::ParseIterationStatement( Scope *parent_scope )
 
 	NextToken(); // consume ')'
 	Statement* for_each_body_statement{ ParseCompoundStatement( parent_scope ) };
-	
+
 	if ( for_each_expr && for_each_body_statement ){
 		return new ForEachStatement( file_name, line_num, for_each_expr, for_each_body_statement );
 	}
@@ -626,7 +633,7 @@ Statement* Parser::ParseIterationStatement( Scope *parent_scope )
 	delete for_each_body_statement;
 	for_each_expr = nullptr;
 	for_each_body_statement = nullptr;
-	
+
 	return nullptr;
 }
 
@@ -981,7 +988,6 @@ Expression* Parser::ParsePrimaryExpression()
 			return nullptr;
 		}
 		NextToken(); // consume ')'
-		std::cout << "Finished parsing closing paren\n";
 		return expr;
 	}
 	default:
@@ -1178,7 +1184,7 @@ Declaration* Parser::ParseDeclaration( Scope *parent_scope )
 	case ScannerTokenType::TOKEN_FUNC_ID:
 	case ScannerTokenType::TOKEN_METHOD_ID:
 	case ScannerTokenType::TOKEN_CONSTRUCT_ID: {
-		auto type = CurrentToken().GetType();
+		auto const type = CurrentToken().GetType();
 		FunctionType function_type = type == ScannerTokenType::TOKEN_FUNC_ID ? FunctionType::FUNCTION :
 			type == ScannerTokenType::TOKEN_METHOD_ID ? FunctionType::METHOD : FunctionType::CONSTRUCTOR;
 
@@ -1188,30 +1194,35 @@ Declaration* Parser::ParseDeclaration( Scope *parent_scope )
 	case ScannerTokenType::TOKEN_CONST_ID:
 		return ParseVariableDeclaration( parent_scope, access_type, storage_type );
 	default:
-		ProcessError( L"Unrecognized token" );
+		ProcessError( L"Expected a variable, class/struct, function declaration here." );
 		return nullptr;
 	}
 }
 
-Declaration* Parser::ParseVariableDeclaration( Scope *parent_scope, AccessType access_type, StorageType storage )
+Declaration* Parser::ParseVariableDeclaration( Scope *parent_scope, AccessType access_type, StorageType storage_type )
 {
 	bool const is_const = CurrentToken().GetType() == ScannerTokenType::TOKEN_CONST_ID;
+	Token const token = CurrentToken();
 	NextToken(); // consume 'var' or 'const'
-	Token token = CurrentToken();
-	DeclarationList *decl_list = new DeclarationList( token.GetFileName(), token.GetLineNumber() );
+	DeclarationList::declaration_list_t decl_list{};
+#ifdef _DEBUG
+	std::wcout << L"\n===========Declaration of variable==============\n\t" << std::endl;
+#endif
 
-	auto clear_container = [] ( DeclarationList *&decl_list ){
-		delete decl_list;
-		decl_list = nullptr;
+	auto clear_list = [] ( DeclarationList::declaration_list_t & list ){
+		for ( auto &element : list ){
+			delete element.second;
+			element.second = nullptr;
+		}
+		list.clear();
 	};
-
 	do {
 		if ( !Match( ScannerTokenType::TOKEN_IDENT ) ){
 			ProcessError( L"expected an valid identifier" );
-			clear_container( decl_list );
+			clear_list( decl_list );
 			return nullptr;
 		}
-		token = CurrentToken();
+		Token curr_token = CurrentToken();
 
 		NextToken(); // consume the identifier
 		Expression* assignment_expr{};
@@ -1220,19 +1231,34 @@ Declaration* Parser::ParseVariableDeclaration( Scope *parent_scope, AccessType a
 			NextToken(); // consume '='
 			assignment_expr = ParseExpression();
 			if ( !assignment_expr ){
-				clear_container( decl_list );
+				clear_list( decl_list );
 				return nullptr;
 			}
 		}
 
-		VariableDeclaration* decl{ new VariableDeclaration( token.GetFileName(), token.GetLineNumber(), token.GetIdentifier(), 
-			assignment_expr, is_const ) };
+		VariableDeclaration* decl{ new VariableDeclaration( curr_token.GetFileName(), curr_token.GetLineNumber(), 
+			curr_token.GetIdentifier(), assignment_expr, is_const ) };
+		decl->SetAccessType( access_type );
+		decl->SetStorageType( storage_type );
+#ifdef _DEBUG
+		std::wcout << curr_token.GetIdentifier() << ", " << std::endl;
+#endif
+
+		decl_list.insert( { curr_token.GetIdentifier(), decl } );
 		if ( Match( ScannerTokenType::TOKEN_COMMA ) ){
 			NextToken(); // consume ','
 		}
-		decl_list->AddDeclaration( decl );
 	} while ( !Match( ScannerTokenType::TOKEN_END_OF_STREAM ) && !Match( ScannerTokenType::TOKEN_SEMI_COLON ) );
-	return decl_list;
+#ifdef _DEBUG
+	std::wcout << L"\n========== End of variable declaration =========" << std::endl;
+#endif
+	if ( !Match( ScannerTokenType::TOKEN_SEMI_COLON ) ){
+		ProcessError( L"Expected a semi-colon(;) at the end of variable/constant declaration." );
+		clear_list( decl_list );
+		return nullptr;
+	}
+	NextToken(); // consume ';'
+	return new DeclarationList( token.GetFileName(), token.GetLineNumber(), std::move( decl_list ) );
 }
 
 Statement* Parser::ParseEmptyStatement( Scope * )

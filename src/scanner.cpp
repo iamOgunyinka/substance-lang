@@ -90,7 +90,7 @@ void Scanner::LoadKeywords()
 	ident_map[ L"false" ] = ScannerTokenType::TOKEN_FALSE_LIT;
 	ident_map[ L"new" ] = ScannerTokenType::TOKEN_NEW;
 	ident_map[ L"null" ] = ScannerTokenType::TOKEN_NULL;
-	ident_map[ L"scope" ] = ScannerTokenType::TOKEN_SCOPE;
+	ident_map[ L"block" ] = ScannerTokenType::TOKEN_BLOCK;
 	ident_map[ L"extern" ] = ScannerTokenType::TOKEN_EXTERN_ID;
 	ident_map[ L"loop" ] = ScannerTokenType::TOKEN_LOOP_ID;
 }

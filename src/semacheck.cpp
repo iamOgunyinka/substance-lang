@@ -39,16 +39,14 @@ namespace compiler
 			case StatementType::VDECL_LIST_STMT:
 			{
 				DeclarationList* decl_list = dynamic_cast< DeclarationList* >( statement );
-				for ( Declaration* declaration : decl_list->GetDeclarations() ){
-					if ( !scope->AddDeclaration( declaration ) ){
-						error_messages.push_back( L"variable '" + declaration->GetName() +
+				for ( std::pair<std::wstring const, Declaration*>& declaration : decl_list->GetDeclarations() ){
+					if ( !scope->AddDeclaration( declaration.second ) ){
+						error_messages.push_back( L"variable '" + ( declaration.second )->GetName() +
 							L"' has already been declared in this scope." );
 					}
 				}
 				break;
 			}
-			// to-do
-			// make sure the LHS of the assignment op is at least declared and if not so, declare a new variable in that scope
 			case StatementType::EXPR_STATEMENT:
 			{
 				Expression *expr = dynamic_cast< ExpressionStatement* >( statement )->GetExpression();
@@ -88,8 +86,11 @@ namespace compiler
 	SemaCheck2::SemaCheck2() : current_scope( nullptr ), parsingIteration( false ), parsingSelection( false ){
 	}
 	//to-do
-	void SemaCheck2::ReportErrors(){
-
+	void SemaCheck2::ReportErrors()
+	{
+		for ( auto const & error : error_messages ){
+			std::wcerr << error << "\n";
+		}
 	}
 
 	bool SemaCheck2::Visit( ParsedProgram* )

@@ -1,29 +1,29 @@
 // f = Foo.new();
-f = Foo.new(1).a(2).b(3).c(4);
+f = Foo.new_(1).a(2).b(3).c(4);
 show f;
 // Foo.new().a();
 
-aa = bb.new[3];
+aa = bb.new_[3];
 
 class Foo {
 	var a; var b;
 	var c; var d;
 	
-	construct new(w) {
+	construct Foo(w) {
 		a = w;
 	}
 	
-	function a(x) : public {
+	public function a_(x) {
 		b = x;
-		return self;
+		return _self;
 	}
 	
-	function b(y) : public {
+	public function b_(y){
 		c = y;
-		return self;
+		return self_;
 	}
 	
-	function c(z) : public {
+	public function c_(z) {
 		d = z;
 		return a + b + c + d;
 	}

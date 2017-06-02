@@ -53,47 +53,72 @@ void Scope::SetLocalCount( int count )
 	local_count = count;
 }
 
-//to-do
 Declaration* Scope::FindDeclaration( std::wstring const & identifier )
 {
-	
+	Scope *current_scope = this;
+	do {
+		DeclarationList *decl_list = current_scope->GetDeclarationList();
+		if ( decl_list ){
+			auto declarations = decl_list->GetDeclarations();
+			auto find_iter = declarations.equal_range( identifier );
+			if ( find_iter.first != find_iter.second ){
+				return ( find_iter.first )->second;
+			}
+		}
+		current_scope = current_scope->GetParentScope();
+	} while ( current_scope );
 	return nullptr;
 }
 
 bool DeclarationList::AddDeclaration( Declaration * declaration ){
-	auto find_decl_iter = std::find_if( declarations.begin(), declarations.end(), [ &declaration ]( Declaration* decl ){
-		return decl->GetName() == declaration->GetName();
-	} );
-	if ( find_decl_iter == declarations.end() ){
-		declarations.push_back( std::move( declaration ) );
+	if ( !declaration ) return false;
+	if ( declaration->GetStatementType() == StatementType::VARIABLE_DECL_STMT ||
+		declaration->GetStatementType() == StatementType::CLASS_DECL_STMT ){
+		auto find_decl_iter = declarations.find( declaration->GetName() );
+		if ( find_decl_iter == declarations.cend() ){
+			declarations.insert( { declaration->GetName(), declaration } );
+			return true;
+		}
+		return false;
+	}
+	else if ( declaration->GetStatementType() == StatementType::VDECL_LIST_STMT ){
+		DeclarationList *decl_list = dynamic_cast< DeclarationList* >( declaration );
+		for ( std::pair<std::wstring const, Declaration *> &decl : decl_list->GetDeclarations() ){
+			if ( !AddDeclaration( decl.second ) ){
+				return false;
+			}
+		}
 		return true;
 	}
-	if ( declaration->GetStatementType() == StatementType::FUNCTION_DECL_STMT ){
+	else if ( declaration->GetStatementType() == StatementType::FUNCTION_DECL_STMT ){
 		FunctionDeclaration const *func_decl = dynamic_cast< FunctionDeclaration const * >( declaration );
 		unsigned int const param_count = func_decl->GetParameters() ? func_decl->GetParameters()->Length() : 0;
 		std::wstring const & function_name = func_decl->GetName();
 
-		DeclarationList::declaration_list_t::iterator overloaded_func_iter = std::find_if( 
-			declarations.begin(), declarations.end(), [ &param_count, &function_name ] ( Declaration* decl ){
-			FunctionDeclaration *func = dynamic_cast< FunctionDeclaration* >( decl );
-			return decl->GetName() == function_name && func && func->GetParameters()->Length() == param_count;
-		} );
-		if ( overloaded_func_iter == declarations.end() ){
-			declarations.push_back( declaration );
-			return true;
+		auto overloaded_func_range_pair = declarations.equal_range( function_name );
+		for ( declaration_list_t::iterator first = overloaded_func_range_pair.first, second = overloaded_func_range_pair.second;
+			first != second; ++first ){
+			if ( first->second->GetStatementType() != StatementType::FUNCTION_DECL_STMT ) return false;
+			auto param_expr_list = dynamic_cast< FunctionDeclaration* >( first->second )->GetParameters();
+			unsigned int const local_param_count = param_expr_list ? param_expr_list->Length() : 0;
+			if ( local_param_count == param_count ) return false;
 		}
+		declarations.insert( { function_name, declaration } );
+		return true;
 	}
 	return false;
 }
 
-DeclarationList* Scope::GetDeclarations()
+DeclarationList* Scope::GetDeclarationList()
 {
 	return declarations;
 }
 
-Scope::Scope( Scope * p ): parent( p ), local_count( 0 ){
+Scope::Scope( Scope * p ) : parent( p ), declarations( nullptr ), local_count( 0 ), type( ScopeType::FUNCTION_SCOPE ){
 }
 
+// to-do: properly delete declarations manually added to declarations in the first sema.
+// current status: No delete taken place, thus memory leak.
 Scope::~Scope(){
 	for ( Statement *statement : statements ){
 		if ( statement ){

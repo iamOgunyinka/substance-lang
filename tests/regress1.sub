@@ -1,10 +1,85 @@
-_a = Array.new[2,11];
-_j = 10;
+struct MyStruct {
+	var a, b, c;
+	private var d, e, f;
+	protected static const g = 12, h = new Foo( a );
+	extern var fg;
+	
+	public construct MyStruct() {
+	}
+	
+	protected method GetA(){
+		return a;
+	}
+	
+	public method SetD( d_ ){
+		d = d_;
+	}
+	class MyStructInner {}
+}
 
-while(_j >= 0) {
-	_a[1,_j] = 13.5 + _j;
-	_j -= 1;
-};
+class MyClass : MyStruct
+{
+	var object;
+	private construct MyClass( my_struct_obj )
+	{
+		object = new MyStruct();
+		object.SetD( my_struct_obj );
+	}
+	
+	protected construct MyClass( sine, cosine )
+	{
+		object = ( sine( 2 ) - cosine( 4 )  );
+	}
+	
+	private class Node {
+		var data;
+		var next_ptr, prev_ptr;
+	}	
+}
 
-show _a[1,10];
-show _a[1,4];
+static function testing( first_arg, second_arg )
+{
+	for each( a in [ 1, 2, 3, 4, 5, 9 ] ){
+		show a;
+	}
+	foreach( b in { "a": 1, 1 + 1 : Foo(), Foo() : "Me" } ){
+		show b.key();
+		show b.value();
+	}
+	
+	for each( s in {} ){}
+	foreach( iter in [] ){
+		//do nothing
+	}
+	var c = @{ return @( a ){ return 12 * first_arg + second_arg; }; };
+	show c()( 15 );
+}
+
+var global_var = 12, global_lambda = @( a ){ show a; };
+
+show global_lambda( global_var );
+
+c = 12; // a variable declaration
+c = new School();
+
+//expects no error, same name but different parameter size
+static function testing( first_arg )
+{
+}
+
+// OK
+static function testing_another(){
+}
+
+function main( a )
+{
+	do {
+		testing( c , c + 1 );
+		--c;
+	} while( c <= 1 );
+	c += 10; // uses the global variable c
+	while( c <= 100 ){
+		show c;
+		c = c + 2;
+	}
+}

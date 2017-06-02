@@ -58,13 +58,6 @@ namespace compiler {
 			return scanner->GetToken( index )->GetType();
 		}
 
-		void Show( const wstring &msg, int depth ) {
-			for ( int i = 0; i < depth; i++ ) {
-				wcout << L"  ";
-			}
-			wcout << msg << endl;
-		}
-
 		inline wstring ToString( int v ) {
 			std::wostringstream str;
 			str << v;
@@ -76,7 +69,7 @@ namespace compiler {
 		void LoadErrorCodes();
 		void ProcessError( const ScannerTokenType type );
 		void ProcessError( const wstring &msg );
-		void ProcessError( const wstring &msg, std::wstring const &, unsigned int const );
+		void ProcessError( std::wstring const &msg, unsigned int const line_number );
 		void ProcessError( const wstring &msg, const ScannerTokenType sync );
 		bool NoErrors();
 
@@ -111,7 +104,8 @@ namespace compiler {
 		Expression*		ParseListExpression();
 		Expression*		ParseDictionaryExpression();
 	public:
-		Parser( const wstring &in ): input( in ), scanner( new Scanner( input )), local_count( - 1 ){
+		explicit Parser( std::wstring const &in ): input( in ), scanner( new Scanner( input )), local_count( - 1 ), 
+			current_token( nullptr ){
 			LoadErrorCodes();
 		}
 

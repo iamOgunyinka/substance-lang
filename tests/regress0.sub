@@ -21,14 +21,15 @@ var global_var = 12, global_lambda = @( a ){ show a; };
 show global_lambda( global_var );
 
 c = 12; // a variable declaration
+c = new School();
 
 //expects no error, same name but different parameter size
 static function testing( first_arg )
 {
 }
 
-// Error.
-static function testing( another_arg ){
+// OK
+static function testing_another(){
 }
 
 function main( a )
@@ -41,5 +42,22 @@ function main( a )
 	while( c <= 100 ){
 		show c;
 		c = c + 2;
+	}
+	
+	switch( 1 + 2 )
+	{
+	case 1:
+		show 1;
+		break;
+	case 2: 
+		var c = 2;
+		show c;
+		break;
+	case 3: 
+	else:
+	block {
+		show 3;
+		break;
+		}
 	}
 }
