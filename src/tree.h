@@ -16,6 +16,7 @@
 #include "common.h"
 #include "scanner.h"
 
+
 namespace compiler {
 	class Declaration;
 	class ExpressionList;
@@ -25,6 +26,7 @@ namespace compiler {
 	class Statement;
 	class SemaCheck1;
 	class SemaCheck2;
+	class SemaType;
 
 	enum class DeclarationType;
 	enum class StatementType;
@@ -36,21 +38,17 @@ namespace compiler {
 
 	class ParseNode {
 	protected:
-		std::wstring file_name;
 		unsigned int line_num;
-
 	public:
-		ParseNode( const std::wstring &filename, const unsigned int line_number ) : file_name( filename ), line_num( line_number ) {
+		ParseNode( const unsigned int line_number ) : line_num( line_number ), type( nullptr ) {
 		}
 
 		virtual ~ParseNode() = default;
-		const std::wstring GetFileName() {
-			return file_name;
-		}
-
+		
 		const int GetLineNumber() {
 			return line_num;
 		}
+		SemaType *type;
 	};
 
 	/****************************
@@ -98,7 +96,7 @@ namespace compiler {
 
 	class Expression : public ParseNode {
 	public:
-		Expression( const std::wstring &file_name, const unsigned int line_num ) : ParseNode( file_name, line_num ) {
+		Expression( const unsigned int line_num ) : ParseNode( line_num ) {
 		}
 
 		virtual ~Expression() {
@@ -109,7 +107,7 @@ namespace compiler {
 
 	class Statement : public ParseNode {
 	public:
-		Statement( const std::wstring &file_name, const unsigned int line_num ) : ParseNode( file_name, line_num ) {
+		Statement( const unsigned int line_num ) : ParseNode( line_num ) {
 		}
 
 		virtual ~Statement(){}
@@ -119,7 +117,7 @@ namespace compiler {
 	class ExpressionList {
 		std::deque<Expression*> expressions;
 	public:
-		ExpressionList( const std::wstring &file_name, const unsigned int line_num ) {
+		ExpressionList( const unsigned int line_num ) {
 		}
 
 		std::deque<Expression*>& GetExpressions() {
@@ -148,8 +146,8 @@ namespace compiler {
 		int id;
 		std::wstring char_string;
 	public:
-		CharacterString( const std::wstring &file_name, const unsigned int line_num, const std::wstring &orig )
-			: Expression( file_name, line_num ) {
+		CharacterString( const unsigned int line_num, const std::wstring &orig )
+			: Expression( line_num ) {
 			int skip = 2;
 			for ( size_t i = 0; i < orig.size(); i++ ) {
 				wchar_t c = orig[ i ];
@@ -245,8 +243,8 @@ namespace compiler {
 	class BooleanLiteral : public Expression {
 		bool value;
 	public:
-		BooleanLiteral( const std::wstring &file_name, const unsigned int line_num, bool v )
-			: Expression( file_name, line_num ), value( v ) {
+		BooleanLiteral( const unsigned int line_num, bool v )
+			: Expression( line_num ), value( v ) {
 		}
 
 		~BooleanLiteral() {
@@ -267,8 +265,8 @@ namespace compiler {
 	****************************/
 	class NullLiteral : public Expression {
 	public:
-		NullLiteral( const std::wstring &file_name, unsigned int const line_number )
-			: Expression( file_name, line_number ) {
+		NullLiteral( unsigned int const line_number )
+			: Expression( line_number ) {
 		}
 
 		~NullLiteral() = default;
@@ -284,7 +282,7 @@ namespace compiler {
 		Statement*		body;
 	public:
 		LambdaExpression( Token const & tok, ExpressionList* params, Statement* lambda_body )
-			: Expression( tok.GetFileName(), tok.GetLineNumber() ), parameters( params ), body( lambda_body ){
+			: Expression( tok.GetLineNumber() ), parameters( params ), body( lambda_body ){
 		}
 		ExpressionType const GetExpressionType() override {
 			return ExpressionType::LAMBDA_EXPR;
@@ -311,8 +309,8 @@ namespace compiler {
 	private:
 		std::vector<expression_ptr_pair_t> list_of_expressions;
 	public:
-		MapExpression( std::wstring const & filename, unsigned int const line_number, std::vector<expression_ptr_pair_t> && list ) :
-			Expression( filename, line_number ), list_of_expressions( std::move( list ) ){
+		MapExpression( unsigned int const line_number, std::vector<expression_ptr_pair_t> && list ) :
+			Expression( line_number ), list_of_expressions( std::move( list ) ){
 		}
 		ExpressionType const GetExpressionType() override {
 			return ExpressionType::MAP_EXPR;
@@ -347,8 +345,8 @@ namespace compiler {
 		Expression *expression;
 
 	public:
-		NewExpression( std::wstring const & filename, unsigned int const line_number, Expression* expr ) :
-			Expression( filename, line_number ), expression( expr ){
+		NewExpression( unsigned int const line_number, Expression* expr ) :
+			Expression( line_number ), expression( expr ){
 		}
 
 		ExpressionType const GetExpressionType() override {
@@ -366,8 +364,8 @@ namespace compiler {
 		CHAR_T value;
 
 	public:
-		CharacterLiteral( const std::wstring &file_name, const unsigned int line_num, CHAR_T v )
-			: Expression( file_name, line_num ), value( v ) {
+		CharacterLiteral( const unsigned int line_num, CHAR_T v )
+			: Expression( line_num ), value( v ) {
 			value = v;
 		}
 
@@ -391,8 +389,8 @@ namespace compiler {
 		INT_T value;
 	public:
 
-		IntegerLiteral( const std::wstring &file_name, const unsigned int line_num, INT_T v )
-			: Expression( file_name, line_num ), value( v ) {
+		IntegerLiteral( const unsigned int line_num, INT_T v )
+			: Expression( line_num ), value( v ) {
 		}
 
 		~IntegerLiteral() {
@@ -413,8 +411,8 @@ namespace compiler {
 	class FloatLiteral : public Expression {
 		FLOAT_T value;
 	public:
-		FloatLiteral( const std::wstring &file_name, const unsigned int line_num, FLOAT_T v )
-			: Expression( file_name, line_num ), value( v ) {
+		FloatLiteral( const unsigned int line_num, FLOAT_T v )
+			: Expression( line_num ), value( v ) {
 			value = v;
 		}
 
@@ -523,8 +521,7 @@ namespace compiler {
 		StorageType  storage;
 		AccessType   access;
 	public:
-		Declaration( const std::wstring &file_name, const unsigned int line_num,
-			std::wstring const &ident = {} ) : Statement( file_name, line_num ),
+		Declaration( const unsigned int line_num, std::wstring const &ident = {} ) : Statement( line_num ),
 			name( ident ), storage( StorageType::NONE ), access( AccessType::NONE) {
 		}
 
@@ -562,8 +559,8 @@ namespace compiler {
 		declaration_list_t declarations;
 	public:
 
-		DeclarationList( std::wstring const & filename, unsigned int const line_number, declaration_list_t && decl_list = {} ) :
-			Declaration( filename, line_number ), declarations( std::move( decl_list ) ){
+		DeclarationList( unsigned int const line_number, declaration_list_t && decl_list = {} ) :
+			Declaration( line_number ), declarations( std::move( decl_list ) ){
 		}
 		~DeclarationList(){
 			for ( std::pair< std::wstring const, Declaration*> &decl : declarations ){
@@ -589,8 +586,7 @@ namespace compiler {
 	class CompoundStatement : public Statement {
 		Scope* scope;
 	public:
-		CompoundStatement( std::wstring const & file_name, unsigned int const line_num, Scope* s ) :
-			Statement( file_name, line_num ), scope( s ){
+		CompoundStatement( unsigned int const line_num, Scope* s ) : Statement( line_num ), scope( s ){
 		}
 		~CompoundStatement(){
 			delete scope;
@@ -614,8 +610,7 @@ namespace compiler {
 		Expression* expression;
 
 	public:
-		ExpressionStatement( std::wstring const & file_name, unsigned int const line_num, Expression* expr ) :
-			Statement( file_name, line_num ), expression( expr ){
+		ExpressionStatement( unsigned int const line_num, Expression* expr ) : Statement( line_num ), expression( expr ){
 		}
 		~ExpressionStatement(){
 			delete expression;
@@ -633,7 +628,7 @@ namespace compiler {
 
 	class EmptyStatement : public Statement {
 	public:
-		EmptyStatement( std::wstring const & filename, unsigned int line_number ) : Statement( filename, line_number ){
+		EmptyStatement( unsigned int line_number ) : Statement( line_number ){
 		}
 
 		StatementType GetStatementType() const final override{
@@ -646,8 +641,7 @@ namespace compiler {
 		std::wstring const	label_name;
 
 	public:
-		LabelledStatement( std::wstring const & filename, unsigned int const line_num, std::wstring const & label,
-			Statement* statement ) : Statement( filename, line_num ),
+		LabelledStatement( unsigned int const line_num, std::wstring const & label, Statement* statement ) : Statement( line_num ),
 			label_statement( statement ), label_name( label ){
 		}
 		~LabelledStatement(){
@@ -671,8 +665,7 @@ namespace compiler {
 		Expression* case_expression;
 		Statement*	case_statement;
 	public:
-		CaseStatement( std::wstring const & filename, unsigned int const line_number, Expression* expression,
-			Statement* statement ) : Statement( filename, line_number ),
+		CaseStatement( unsigned int const line_number, Expression* expression, Statement* statement ) : Statement( line_number ),
 			case_expression( expression ), case_statement( statement ){
 		}
 		~CaseStatement(){
@@ -691,8 +684,7 @@ namespace compiler {
 		Expression* expression;
 
 	public:
-		ReturnStatement( const std::wstring &file_name, const unsigned int line_num, Expression* expr )
-			: Statement( file_name, line_num ), expression( expr ) {
+		ReturnStatement( const unsigned int line_num, Expression* expr ) : Statement( line_num ), expression( expr ) {
 		}
 		~ReturnStatement(){
 			delete expression;
@@ -711,8 +703,8 @@ namespace compiler {
 
 	class ContinueStatement : public Statement {
 	public:
-		ContinueStatement( const std::wstring &file_name, const unsigned int line_num )
-			: Statement( file_name, line_num ){
+		ContinueStatement( unsigned int const line_num )
+			: Statement( line_num ){
 		}
 
 		StatementType GetStatementType() const final override {
@@ -723,8 +715,7 @@ namespace compiler {
 
 	class BreakStatement : public Statement {
 	public:
-		BreakStatement( const std::wstring &file_name, const unsigned int line_num )
-			: Statement( file_name, line_num ){
+		BreakStatement( const unsigned int line_num ) : Statement( line_num ){
 		}
 
 		StatementType GetStatementType() const final override {
@@ -739,9 +730,8 @@ namespace compiler {
 		std::wstring	caller;
 		bool			returns_value;
 	public:
-		FunctionCall( const std::wstring &file_name, const unsigned int line_num, Expression* func,
-			ExpressionList* args ) : Expression( file_name, line_num ), function( func ),
-			arguments( args ), caller( L"" ), returns_value( false ){
+		FunctionCall( const unsigned int line_num, Expression* func, ExpressionList* args ) : Expression( line_num ), 
+			function( func ), arguments( args ), caller( L"" ), returns_value( false ){
 		}
 		~FunctionCall(){
 			delete function;
@@ -776,8 +766,7 @@ namespace compiler {
 		Expression* expression;
 
 	public:
-		Dump( const std::wstring &file_name, const unsigned int line_num, Expression* expr )
-			: Statement( file_name, line_num ), expression( expr ) {
+		Dump( unsigned int const line_num, Expression* expr ) : Statement( line_num ), expression( expr ) {
 		}
 		~Dump(){
 			delete expression;
@@ -798,8 +787,8 @@ namespace compiler {
 		Statement*	switch_statement;
 
 	public:
-		SwitchStatement( const std::wstring &file_name, const unsigned int line_num, Expression* logical_exp, Statement* body ) :
-			Statement( file_name, line_num ), conditional_expression( logical_exp ),
+		SwitchStatement( unsigned int const line_num, Expression* logical_exp, Statement* body ) :
+			Statement( line_num ), conditional_expression( logical_exp ),
 			switch_statement( body ){
 		}
 		~SwitchStatement(){
@@ -828,8 +817,8 @@ namespace compiler {
 		Statement*	do_while_body;
 		Expression* logical_expression;
 	public:
-		DoWhileStatement( std::wstring const & filename, unsigned int const line_num, Statement* body, Expression* expr )
-			: Statement( filename, line_num ), do_while_body( body ), logical_expression( expr ){
+		DoWhileStatement( unsigned int const line_num, Statement* body, Expression* expr ) : Statement( line_num ), 
+			do_while_body( body ), logical_expression( expr ){
 		}
 		~DoWhileStatement(){
 			delete do_while_body;
@@ -855,9 +844,8 @@ namespace compiler {
 		Statement*	while_body;
 
 	public:
-		WhileStatement( std::wstring const &file_name, unsigned int const line_num, Expression* logical_expr,
-			Statement* block ) : Statement( file_name, line_num ), logical_expression( logical_expr ),
-			while_body( block ){
+		WhileStatement( unsigned int const line_num, Expression* logical_expr, Statement* block ) : Statement( line_num ), 
+			logical_expression( logical_expr ), while_body( block ){
 		}
 		~WhileStatement(){
 			delete logical_expression;
@@ -883,8 +871,7 @@ namespace compiler {
 	class LoopStatement : public Statement {
 		CompoundStatement* loop_body;
 	public:
-		LoopStatement( std::wstring const & filename, unsigned int const line_number, CompoundStatement* body ) :
-			Statement( filename, line_number ), loop_body( body ){
+		LoopStatement( unsigned int const line_number, CompoundStatement* body ) : Statement( line_number ), loop_body( body ){
 		}
 		~LoopStatement(){
 			delete loop_body;
@@ -903,8 +890,8 @@ namespace compiler {
 		Expression* expression;
 		Statement*	body_statement;
 	public:
-		ForEachStatement( std::wstring const & filename, unsigned int const line_number, Expression* expr, Statement* body )
-			: Statement( filename, line_number ), expression( expr ), body_statement( body ){
+		ForEachStatement( unsigned int const line_number, Expression* expr, Statement* body ) : Statement( line_number ), 
+			expression( expr ), body_statement( body ){
 		}
 		~ForEachStatement(){
 			delete expression;
@@ -925,9 +912,8 @@ namespace compiler {
 		Statement*	else_statement;
 
 	public:
-		IfStatement( const std::wstring &file_name, const unsigned int line_num, Expression* logical_exp,
-			Statement* then_part, Statement* else_part )
-			: Statement( file_name, line_num ), conditional_expression( logical_exp ),
+		IfStatement( const unsigned int line_num, Expression* logical_exp, Statement* then_part, Statement* else_part )
+			: Statement( line_num ), conditional_expression( logical_exp ),
 			then_statement( then_part ), else_statement( else_part ){
 		}
 		~IfStatement(){
@@ -959,8 +945,7 @@ namespace compiler {
 
 	class UnaryExpression : public Expression {
 	protected:
-		UnaryExpression( std::wstring const & filename, unsigned int const line_num ) :
-			Expression( filename, line_num ){
+		UnaryExpression( unsigned int const line_num ) : Expression( line_num ){
 		}
 		virtual ~UnaryExpression() = default;
 	};
@@ -972,7 +957,7 @@ namespace compiler {
 		Expression* rhs;
 	public:
 		BinaryExpression( Token const & tok, Expression* lhs_expression, Expression* rhs_expression ) :
-			Expression( token.GetFileName(), token.GetLineNumber() ),
+			Expression( token.GetLineNumber() ),
 			token( tok ), lhs( lhs_expression ), rhs( rhs_expression ){
 		}
 
@@ -1025,12 +1010,12 @@ namespace compiler {
 	{
 		std::wstring const variable_name;
 	public:
-		explicit Variable( Token const &tok ) : Expression( tok.GetFileName(), tok.GetLineNumber() ), 
+		explicit Variable( Token const &tok ) : Expression( tok.GetLineNumber() ), 
 			variable_name( tok.GetIdentifier() ){
 		}
 
-		Variable( std::wstring const & filename, unsigned int const line_number, std::wstring const & identifier ) :
-			Expression( filename, line_number ), variable_name( identifier ){
+		Variable( unsigned int const line_number, std::wstring const & identifier ) :
+			Expression( line_number ), variable_name( identifier ){
 		}
 
 		ExpressionType const GetExpressionType() override {
@@ -1047,10 +1032,8 @@ namespace compiler {
 		Expression*	lhs_expression;
 		Expression* rhs_expression;
 	public:
-		ConditionalExpression( std::wstring const & filename, unsigned int const line_num,
-			Expression* conditional, Expression* lhs, Expression* rhs ) : Expression( filename, line_num ),
-			conditional_expression( conditional ), lhs_expression( lhs ), rhs_expression( rhs )
-		{
+		ConditionalExpression( unsigned int const line_num, Expression* conditional, Expression* lhs, Expression* rhs ) 
+			: Expression( line_num ), conditional_expression( conditional ), lhs_expression( lhs ), rhs_expression( rhs ){
 		}
 		~ConditionalExpression(){
 			delete conditional_expression;
@@ -1083,9 +1066,8 @@ namespace compiler {
 		Expression*	expression;
 		ScannerTokenType			type;
 	public:
-		UnaryOperation( std::wstring const & filename, unsigned int const line_num,
-			ScannerTokenType t, Expression* expr ) :
-			UnaryExpression( filename, line_num ), type( t ),
+		UnaryOperation( unsigned int const line_num, ScannerTokenType t, Expression* expr ) :
+			UnaryExpression( line_num ), type( t ),
 			expression( expr ){
 		}
 
@@ -1110,8 +1092,8 @@ namespace compiler {
 	class PostfixExpression : public UnaryExpression
 	{
 	protected:
-		PostfixExpression( std::wstring const & filename, unsigned int const line_number ) :
-			UnaryExpression( filename, line_number ){
+		PostfixExpression( unsigned int const line_number ) :
+			UnaryExpression( line_number ){
 		}
 		virtual ~PostfixExpression() = default;
 	};
@@ -1121,8 +1103,8 @@ namespace compiler {
 		Expression* expression;
 		Expression* array_index;
 	public:
-		SubscriptExpression( std::wstring const & filename, unsigned int const line_number, Expression* expr, Expression* index )
-			: PostfixExpression( filename, line_number ), expression( expr ), array_index( index ){
+		SubscriptExpression( unsigned int const line_number, Expression* expr, Expression* index )
+			: PostfixExpression( line_number ), expression( expr ), array_index( index ){
 		}
 		~SubscriptExpression(){
 			delete expression;
@@ -1148,8 +1130,8 @@ namespace compiler {
 		Token const	variable_id;
 		Expression* expression;
 	public:
-		DotExpression( std::wstring const & filename, unsigned int const line_number, Token const & id, Expression* expr )
-			: PostfixExpression( filename, line_number ), variable_id( id ), expression( expr ){
+		DotExpression( unsigned int const line_number, Token const & id, Expression* expr )
+			: PostfixExpression( line_number ), variable_id( id ), expression( expr ){
 		}
 		~DotExpression(){
 			delete expression;
@@ -1169,8 +1151,8 @@ namespace compiler {
 	{
 		Expression* expression;
 	public:
-		PostIncrExpression( std::wstring const & filename, unsigned int const line_number, Expression* expr ) :
-			PostfixExpression( filename, line_number ), expression( expr ){
+		PostIncrExpression( unsigned int const line_number, Expression* expr ) :
+			PostfixExpression( line_number ), expression( expr ){
 		}
 		~PostIncrExpression(){
 			delete expression;
@@ -1190,8 +1172,8 @@ namespace compiler {
 	{
 		Expression* expression;
 	public:
-		PostDecrExpression( std::wstring const & filename, unsigned int const line_number, Expression* expr ) :
-			PostfixExpression( filename, line_number ), expression( expr ){
+		PostDecrExpression( unsigned int const line_number, Expression* expr ) :
+			PostfixExpression( line_number ), expression( expr ){
 		}
 		~PostDecrExpression(){
 			delete expression;
@@ -1211,8 +1193,7 @@ namespace compiler {
 	{
 		Expression* expression;
 	public:
-		PreIncrExpression( std::wstring const & filename, unsigned int const line_number, Expression* expr ) :
-			UnaryExpression( filename, line_number ), expression( expr ){
+		PreIncrExpression( unsigned int const line_number, Expression* expr ) : UnaryExpression( line_number ), expression( expr ){
 		}
 		~PreIncrExpression(){
 			delete expression;
@@ -1232,8 +1213,8 @@ namespace compiler {
 	{
 		Expression* expression;
 	public:
-		PreDecrExpression( std::wstring const & filename, unsigned int const line_number, Expression* expr ) :
-			UnaryExpression( filename, line_number ), expression( expr ){
+		PreDecrExpression( unsigned int const line_number, Expression* expr ) :
+			UnaryExpression( line_number ), expression( expr ){
 		}
 		~PreDecrExpression(){
 			delete expression;
@@ -1254,7 +1235,7 @@ namespace compiler {
 		ExpressionList* expression_list;
 	public:
 		ListExpression( Token const & token, ExpressionList* expr_list ) :
-			Expression( token.GetFileName(), token.GetLineNumber() ), expression_list( expr_list ){
+			Expression( token.GetLineNumber() ), expression_list( expr_list ){
 		}
 		~ListExpression(){
 			delete expression_list;
@@ -1288,8 +1269,8 @@ namespace compiler {
 		unsigned int		nparams_count;
 
 	public:
-		FunctionDeclaration( const std::wstring &file_name, const unsigned int line_num, const std::wstring &function_name,
-			ExpressionList* params ) : Declaration( file_name, line_num, function_name ), storage( StorageType::NONE ),
+		FunctionDeclaration( const unsigned int line_num, const std::wstring &function_name,
+			ExpressionList* params ) : Declaration( line_num, function_name ), storage( StorageType::NONE ),
 			access( AccessType::NONE ), function_type( FunctionType::FUNCTION ), parameters( params ),
 			function_body( nullptr ), local_count( 0 ), nparams_count( 0 ){
 		}
@@ -1363,8 +1344,8 @@ namespace compiler {
 		bool is_const_;
 		Expression* value_expr;
 	public:
-		VariableDeclaration( std::wstring const & filename, unsigned int const line_number, std::wstring const & id,
-			Expression* expr, bool is_const ) : Declaration( filename, line_number, id ), is_const_( is_const ),
+		VariableDeclaration( unsigned int const line_number, std::wstring const & id, Expression* expr, bool is_const ) : 
+			Declaration( line_number, id ), is_const_( is_const ),
 			value_expr( expr ){
 		}
 		~VariableDeclaration(){
@@ -1387,9 +1368,9 @@ namespace compiler {
 		unsigned int		instance_variable_count;
 		unsigned int		static_variable_count;
 	public:
-		ClassDeclaration( const std::wstring &file_name, const unsigned int line_num, const std::wstring &name,
-			Scope *, bool is_struct ) :Declaration( file_name, line_num, name ), is_struct_( is_struct ),
-			decl_list( new DeclarationList( file_name, line_num ) ),
+		ClassDeclaration( const unsigned int line_num, const std::wstring &name, Scope *, bool is_struct ) 
+			:Declaration( line_num, name ), is_struct_( is_struct ),
+			decl_list( new DeclarationList( line_num ) ),
 			instance_variable_count(0), static_variable_count( 0 )
 		{
 		}
@@ -1484,25 +1465,24 @@ namespace compiler {
 	 * TreeFactory class
 	 ****************************/
 	struct TreeFactory {
-		static Statement* MakeReturnStatement( std::wstring const &file_name, unsigned int line_num, Expression* expression ){
-			Statement* return_statement{ new ReturnStatement( file_name, line_num, expression ) };
+		static Statement* MakeReturnStatement( unsigned int line_num, Expression* expression ){
+			Statement* return_statement{ new ReturnStatement( line_num, expression ) };
 			return return_statement;
 		}
 
-		static Statement* MakeContinueStatement( std::wstring const &file_name, unsigned int line_num ){
-			Statement* continue_statement{ new ContinueStatement( file_name, line_num ) };
+		static Statement* MakeContinueStatement( unsigned int line_num ){
+			Statement* continue_statement{ new ContinueStatement( line_num ) };
 			return continue_statement;
 		}
 
-		static Statement* MakeBreakStatement( std::wstring const &file_name, unsigned int line_num ) {
-			Statement* break_statement{ new BreakStatement( file_name, line_num ) };
+		static Statement* MakeBreakStatement( unsigned int line_num ) {
+			Statement* break_statement{ new BreakStatement( line_num ) };
 			return break_statement;
 		}
 
-		static Statement* MakeExpressionStatement( std::wstring const &file_name, unsigned int line_num,
-			Expression* expression )
+		static Statement* MakeExpressionStatement( unsigned int line_num, Expression* expression )
 		{
-			Statement* expression_statement{ new ExpressionStatement( file_name, line_num, expression ) };
+			Statement* expression_statement{ new ExpressionStatement( line_num, expression ) };
 			return expression_statement;
 		}
 
@@ -1515,13 +1495,13 @@ namespace compiler {
 
 		static Expression* MakePreIncrExpression( Token const & token, Expression* expr )
 		{
-			Expression* pre_incr_expression{ new PreIncrExpression( token.GetFileName(), token.GetLineNumber(), expr ) };
+			Expression* pre_incr_expression{ new PreIncrExpression( token.GetLineNumber(), expr ) };
 			return pre_incr_expression;
 		}
 
 		static Statement* MakeShowExpressionStatement( Token const & tok, Expression* expr )
 		{
-			Statement* dump_statement{ new Dump( tok.GetFileName(), tok.GetLineNumber(), expr ) };
+			Statement* dump_statement{ new Dump( tok.GetLineNumber(), expr ) };
 			return dump_statement;
 		}
 
@@ -1533,45 +1513,45 @@ namespace compiler {
 
 		static Expression* MakePreDecrExpression( Token const & token, Expression* expr )
 		{
-			Expression* pre_decr_expression{ new PreDecrExpression( token.GetFileName(), token.GetLineNumber(), expr ) };
+			Expression* pre_decr_expression{ new PreDecrExpression( token.GetLineNumber(), expr ) };
 			return pre_decr_expression;
 		}
 
 		static Expression* MakeUnaryOperation( Token const & token, Expression* expr )
 		{
-			Expression* unary_op{ new UnaryOperation( token.GetFileName(), token.GetLineNumber(), token.GetType(), expr ) };
+			Expression* unary_op{ new UnaryOperation( token.GetLineNumber(), token.GetType(), expr ) };
 			return unary_op;
 		}
 
 		static Expression* MakeIntegerLiteral( Token const & tok )
 		{
-			Expression* int_expr{ new IntegerLiteral( tok.GetFileName(), tok.GetLineNumber(), tok.GetIntLit() ) };
+			Expression* int_expr{ new IntegerLiteral( tok.GetLineNumber(), tok.GetIntLit() ) };
 			return int_expr;
 		}
 
 		static Expression* MakeFloatLiteral( Token const & tok )
 		{
-			Expression* float_expr{ new FloatLiteral( tok.GetFileName(), tok.GetLineNumber(), tok.GetFloatLit() ) };
+			Expression* float_expr{ new FloatLiteral( tok.GetLineNumber(), tok.GetFloatLit() ) };
 			return float_expr;
 		}
 
 		static Expression* MakeStringLiteral( Token const & tok )
 		{
-			Expression* string_expr{ new CharacterString( tok.GetFileName(), tok.GetLineNumber(),
+			Expression* string_expr{ new CharacterString( tok.GetLineNumber(),
 				tok.GetIdentifier() ) };
 			return string_expr;
 		}
 
 		static Expression* MakeCharLiteral( Token const & token )
 		{
-			Expression* char_expr{ new CharacterLiteral( token.GetFileName(), token.GetLineNumber(), token.GetCharLit() ) };
+			Expression* char_expr{ new CharacterLiteral( token.GetLineNumber(), token.GetCharLit() ) };
 			return char_expr;
 		}
 
 		static Expression* MakeBooleanLiteral( Token const & token )
 		{
 			bool const value = token.GetType() == ScannerTokenType::TOKEN_FALSE_LIT ? false : true;
-			BooleanLiteral* tmp = new BooleanLiteral( token.GetFileName(), token.GetLineNumber(), value );
+			BooleanLiteral* tmp = new BooleanLiteral( token.GetLineNumber(), value );
 			return tmp;
 		}
 
@@ -1590,19 +1570,19 @@ namespace compiler {
 		static Expression* MakeMapExpression( Token const & tok, std::vector<MapExpression::expression_ptr_pair_t> &&
 			list )
 		{
-			Expression* map_expression{ new MapExpression( tok.GetFileName(), tok.GetLineNumber(), std::move( list ) ) };
+			Expression* map_expression{ new MapExpression( tok.GetLineNumber(), std::move( list ) ) };
 			return map_expression;
 		}
 
 		static Expression* MakeNewExpression( Token const & tok, Expression* expr )
 		{
-			Expression* expression{ new NewExpression( tok.GetFileName(), tok.GetLineNumber(), expr ) };
+			Expression* expression{ new NewExpression( tok.GetLineNumber(), expr ) };
 			return expression;
 		}
 
 		static Expression* MakeNullLitExpression( Token const & token )
 		{
-			Expression* nullExpr{ new NullLiteral( token.GetFileName(), token.GetLineNumber() ) };
+			Expression* nullExpr{ new NullLiteral( token.GetLineNumber() ) };
 			return nullExpr;
 		}
 	};

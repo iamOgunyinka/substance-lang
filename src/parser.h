@@ -51,7 +51,7 @@ namespace compiler {
 		}
 
 		inline const wstring GetFileName() {
-			return scanner->GetToken()->GetFileName();
+			return scanner->GetFileName();
 		}
 
 		inline ScannerTokenType GetToken( int index = 0 ) {
@@ -81,7 +81,7 @@ namespace compiler {
 		Statement*		ParseSwitchStatement( Scope *parent );
 		Statement*		ParseJumpStatement( Scope *parent );
 		Statement*		ParseShowStatement( Scope *parent_scope );
-		CompoundStatement*	ParseCompoundStatement( Scope *parent_scope );
+		CompoundStatement*	ParseCompoundStatement( Scope *parent_scope, ScopeType );
 		
 		Declaration*	ParseClass( Scope *parent_scope, AccessType, StorageType );
 		Declaration*	ParseFunction( Scope *parent_scope, FunctionType func_type, AccessType, StorageType );

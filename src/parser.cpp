@@ -187,7 +187,6 @@ std::unique_ptr<ParsedProgram> Parser::Parse()
 Declaration* Parser::ParseClass( Scope *parent_scope, AccessType access_type, StorageType storage_type )
 {
 	unsigned int const line_num = GetLineNumber();
-	std::wstring const &file_name = GetFileName();
 
 	bool is_struct = CurrentToken().GetType() == ScannerTokenType::TOKEN_STRUCT_ID;
 	NextToken(); // consume 'class' or 'struct'
@@ -201,7 +200,7 @@ Declaration* Parser::ParseClass( Scope *parent_scope, AccessType access_type, St
 	std::wcout << L"Class: name='" + scanner->GetToken()->GetIdentifier() + L"'\n";
 #endif
 
-	ClassDeclaration *klass = new ClassDeclaration( file_name, line_num, CurrentToken().GetIdentifier(), parent_scope, is_struct );
+	ClassDeclaration *klass = new ClassDeclaration( line_num, CurrentToken().GetIdentifier(), parent_scope, is_struct );
 	NextToken(); // consume class name
 
 	// we have a base/super class
@@ -250,7 +249,6 @@ Declaration* Parser::ParseClass( Scope *parent_scope, AccessType access_type, St
 Declaration* Parser::ParseFunction( Scope *parent_scope, FunctionType function_type, AccessType access, StorageType storage )
 {
 	unsigned int const line_num = GetLineNumber();
-	std::wstring const &file_name = GetFileName();
 	std::wstring stype{};
 
 	switch ( function_type )
@@ -301,7 +299,7 @@ Declaration* Parser::ParseFunction( Scope *parent_scope, FunctionType function_t
 	}
 	NextToken(); // consume '('
 	if ( !Match( ScannerTokenType::TOKEN_CLOSED_PAREN ) ){
-		parameters = new ExpressionList( file_name, line_num );
+		parameters = new ExpressionList( line_num );
 	}
 	while ( !Match( ScannerTokenType::TOKEN_END_OF_STREAM ) && !Match( ScannerTokenType::TOKEN_CLOSED_PAREN ) ){
 		Expression* expr{ ParseExpression() };
@@ -331,7 +329,7 @@ Declaration* Parser::ParseFunction( Scope *parent_scope, FunctionType function_t
 	NextToken(); // consume ')'
 
 	// let's parse the function body
-	CompoundStatement* function_body = ParseCompoundStatement( parent_scope );
+	CompoundStatement* function_body = ParseCompoundStatement( parent_scope, ScopeType::FUNCTION_SCOPE );
 	if ( !function_body ){
 		delete parameters;
 		parameters = nullptr;
@@ -340,7 +338,7 @@ Declaration* Parser::ParseFunction( Scope *parent_scope, FunctionType function_t
 	}
 	function_body->GetScope()->SetScopeType( ScopeType::FUNCTION_SCOPE );
 
-	FunctionDeclaration* function{ new FunctionDeclaration( file_name, line_num, function_name, std::move( parameters ) ) };
+	FunctionDeclaration* function{ new FunctionDeclaration( line_num, function_name, std::move( parameters ) ) };
 	function->SetFunctionBody( function_body );
 	function->SetFunctionType( function_type );
 	function->SetAccess( access );
@@ -348,7 +346,8 @@ Declaration* Parser::ParseFunction( Scope *parent_scope, FunctionType function_t
 	return function;
 }
 
-CompoundStatement* Parser::ParseCompoundStatement( Scope *parent )
+// to-dp
+CompoundStatement* Parser::ParseCompoundStatement( Scope *parent, ScopeType scope_type )
 {
 	if ( !Match( ScannerTokenType::TOKEN_OPEN_BRACE ) ){
 		ProcessError( ScannerTokenType::TOKEN_OPEN_BRACE );
@@ -368,7 +367,7 @@ CompoundStatement* Parser::ParseCompoundStatement( Scope *parent )
 	}
 	NextToken(); // consume '}'
 
-	return new CompoundStatement( file_name, line_num, statement_scope );
+	return new CompoundStatement( line_num, statement_scope );
 }
 
 Scope* Parser::ParseScope( Scope *parent_scope )
@@ -394,9 +393,10 @@ Statement* Parser::ParseStatement( Scope *parent_scope )
 	case ScannerTokenType::TOKEN_ELSE_ID:
 		return ParseLabelledStatement( parent_scope );
 
+		// to-do
 	case ScannerTokenType::TOKEN_BLOCK:
 		NextToken(); // consume 'block'
-		return ParseCompoundStatement( parent_scope );
+		return ParseCompoundStatement( parent_scope, ScopeType::NAMESPACE_SCOPE );
 
 	case ScannerTokenType::TOKEN_FOR_EACH_ID:
 	case ScannerTokenType::TOKEN_FOR_ID:
@@ -499,7 +499,7 @@ Statement* Parser::ParseIfStatement( Scope *parent_scope )
 	}
 	NextToken();
 
-	Statement* then_statement{ ParseCompoundStatement( parent_scope ) };
+	Statement* then_statement{ ParseCompoundStatement( parent_scope, ScopeType::TEMP_SCOPE ) };
 
 	if ( !then_statement ){
 		ProcessError( L"Unable to parse the statement in the IF statement." );
@@ -513,7 +513,7 @@ Statement* Parser::ParseIfStatement( Scope *parent_scope )
 	Statement* else_statement{};
 
 	if ( Match( ScannerTokenType::TOKEN_ELSE_ID ) ){
-		else_statement = ParseCompoundStatement( parent_scope );
+		else_statement = ParseCompoundStatement( parent_scope, ScopeType::TEMP_SCOPE );
 		if ( !else_statement ){
 			ProcessError( L"Error while processing the else part of the if statement." );
 
@@ -526,14 +526,13 @@ Statement* Parser::ParseIfStatement( Scope *parent_scope )
 		}
 	}
 
-	IfStatement* if_statement{ new IfStatement( file_name, line_num, logical_expression, then_statement, else_statement ) };
+	IfStatement* if_statement{ new IfStatement( line_num, logical_expression, then_statement, else_statement ) };
 	return if_statement;
 }
 
 Statement* Parser::ParseIterationStatement( Scope *parent_scope )
 {
 	unsigned int const line_num = GetLineNumber();
-	std::wstring const file_name = GetFileName();
 
 	Statement* iterative_statement{};
 	ScannerTokenType const tk = CurrentToken().GetType();
@@ -541,13 +540,13 @@ Statement* Parser::ParseIterationStatement( Scope *parent_scope )
 	if ( tk == ScannerTokenType::TOKEN_LOOP_ID ){
 		Token const token = CurrentToken();
 		NextToken(); // consume 'loop'
-		CompoundStatement* loop_body{ ParseCompoundStatement( parent_scope ) };
+		CompoundStatement* loop_body{ ParseCompoundStatement( parent_scope, ScopeType::TEMP_SCOPE ) };
 		if ( !loop_body ) return nullptr;
-		return new LoopStatement( token.GetFileName(), token.GetLineNumber(), loop_body );
+		return new LoopStatement( token.GetLineNumber(), loop_body );
 	}
 	else if ( tk == ScannerTokenType::TOKEN_DO_ID ){
 		NextToken(); // consume 'do'
-		Statement* do_body{ ParseCompoundStatement( parent_scope ) };
+		Statement* do_body{ ParseCompoundStatement( parent_scope, ScopeType::TEMP_SCOPE ) };
 		if ( !Match( ScannerTokenType::TOKEN_WHILE_ID ) ){
 			ProcessError( ScannerTokenType::TOKEN_WHILE_ID );
 
@@ -584,7 +583,7 @@ Statement* Parser::ParseIterationStatement( Scope *parent_scope )
 			return nullptr;
 		}
 		NextToken(); // consume ';'
-		return new DoWhileStatement( file_name, line_num, do_body, expression );
+		return new DoWhileStatement( line_num, do_body, expression );
 	}
 	else if ( tk == ScannerTokenType::TOKEN_WHILE_ID ){
 		NextToken(); // consume 'while'
@@ -601,9 +600,9 @@ Statement* Parser::ParseIterationStatement( Scope *parent_scope )
 			return nullptr;
 		}
 		NextToken(); //consume ')'
-		Statement* statement{ ParseCompoundStatement( parent_scope ) };
+		Statement* statement{ ParseCompoundStatement( parent_scope, ScopeType::TEMP_SCOPE ) };
 		if ( expression && statement ){
-			return new WhileStatement( file_name, line_num, expression, statement );
+			return new WhileStatement( line_num, expression, statement );
 		}
 		delete expression;
 		expression = nullptr;
@@ -623,10 +622,10 @@ Statement* Parser::ParseIterationStatement( Scope *parent_scope )
 	Expression* for_each_expr{ ParseExpression() };
 
 	NextToken(); // consume ')'
-	Statement* for_each_body_statement{ ParseCompoundStatement( parent_scope ) };
+	Statement* for_each_body_statement{ ParseCompoundStatement( parent_scope, ScopeType::TEMP_SCOPE ) };
 
 	if ( for_each_expr && for_each_body_statement ){
-		return new ForEachStatement( file_name, line_num, for_each_expr, for_each_body_statement );
+		return new ForEachStatement( line_num, for_each_expr, for_each_body_statement );
 	}
 
 	delete for_each_expr;
@@ -670,7 +669,7 @@ Statement* Parser::ParseLabelledStatement( Scope *parent )
 			expr = nullptr;
 			return nullptr;
 		}
-		return new CaseStatement( tok.GetFileName(), tok.GetLineNumber(), expr, statement );
+		return new CaseStatement( tok.GetLineNumber(), expr, statement );
 	}
 	default:
 		ProcessError( L"Identifier allowed in this scope is 'else' and 'case'" );
@@ -680,7 +679,7 @@ Statement* Parser::ParseLabelledStatement( Scope *parent )
 	if ( !statement ){
 		return nullptr;
 	}
-	return new LabelledStatement( tok.GetFileName(), tok.GetLineNumber(), tok.GetIdentifier(), statement );
+	return new LabelledStatement( tok.GetLineNumber(), tok.GetIdentifier(), statement );
 }
 
 Statement* Parser::ParseSwitchStatement( Scope *parent_scope )
@@ -702,12 +701,12 @@ Statement* Parser::ParseSwitchStatement( Scope *parent_scope )
 		return nullptr;
 	}
 	NextToken(); // consume ')'
-	Statement* switch_body{ ParseCompoundStatement( parent_scope ) };
+	Statement* switch_body{ ParseCompoundStatement( parent_scope, ScopeType::TEMP_SCOPE ) };
 	if ( !switch_body ) {
 		delete switch_expression;
 		return nullptr;
 	}
-	return new SwitchStatement( tok.GetFileName(), tok.GetLineNumber(), switch_expression, switch_body );
+	return new SwitchStatement( tok.GetLineNumber(), switch_expression, switch_body );
 }
 
 Statement* Parser::ParseJumpStatement( Scope *parent )
@@ -721,7 +720,7 @@ Statement* Parser::ParseJumpStatement( Scope *parent )
 			return nullptr;
 		}
 		NextToken(); // consume ';'
-		return TreeFactory::MakeContinueStatement( tok.GetFileName(), tok.GetLineNumber() );
+		return TreeFactory::MakeContinueStatement( tok.GetLineNumber() );
 	case ScannerTokenType::TOKEN_BREAK_ID:
 		NextToken(); // consume 'break'
 		if ( !Match( ScannerTokenType::TOKEN_SEMI_COLON ) ){
@@ -729,7 +728,7 @@ Statement* Parser::ParseJumpStatement( Scope *parent )
 			return nullptr;
 		}
 		NextToken(); // consume ';'
-		return TreeFactory::MakeBreakStatement( tok.GetFileName(), tok.GetLineNumber() );
+		return TreeFactory::MakeBreakStatement( tok.GetLineNumber() );
 	case ScannerTokenType::TOKEN_RETURN_ID:
 	{
 		NextToken(); // consume 'return'
@@ -744,7 +743,7 @@ Statement* Parser::ParseJumpStatement( Scope *parent )
 			return nullptr;
 		}
 		NextToken(); // consume ';'
-		return TreeFactory::MakeReturnStatement( tok.GetFileName(), tok.GetLineNumber(), expression );
+		return TreeFactory::MakeReturnStatement( tok.GetLineNumber(), expression );
 	}
 	default:
 		ProcessError( L"Unexpected statement" );
@@ -764,7 +763,7 @@ Statement* Parser::ParseExpressionStatement()
 		return nullptr;
 	}
 	NextToken(); // consume ';'
-	return TreeFactory::MakeExpressionStatement( tok.GetFileName(), tok.GetLineNumber(), expression );
+	return TreeFactory::MakeExpressionStatement( tok.GetLineNumber(), expression );
 }
 
 Expression* Parser::ParseExpression()
@@ -815,7 +814,7 @@ Expression*	Parser::ParseConditionalExpression()
 		NextToken(); // consume ':'
 		Expression* rhs_expression{ ParseExpression() };
 		if ( lhs_expression && rhs_expression ){
-			return new ConditionalExpression( tok.GetFileName(), tok.GetLineNumber(), expression, lhs_expression, rhs_expression );
+			return new ConditionalExpression( tok.GetLineNumber(), expression, lhs_expression, rhs_expression );
 		}
 		delete expression;
 		delete lhs_expression;
@@ -898,7 +897,7 @@ Expression* Parser::ParseListExpression()
 	NextToken(); // consume '['
 	ExpressionList* list_params{};
 	if ( !Match( ScannerTokenType::TOKEN_CLOSED_BRACKET ) ){
-		list_params = new ExpressionList( CurrentToken().GetFileName(), CurrentToken().GetLineNumber() );
+		list_params = new ExpressionList( CurrentToken().GetLineNumber() );
 	}
 	while ( !Match( ScannerTokenType::TOKEN_END_OF_STREAM ) && !Match( ScannerTokenType::TOKEN_CLOSED_BRACKET ) ){
 		list_params->AddExpression( ParseExpression() );
@@ -1000,7 +999,7 @@ ExpressionList* Parser::ParseArgumentExpressionList()
 {
 	ExpressionList* argList{};
 	if ( !Match( ScannerTokenType::TOKEN_CLOSED_PAREN ) ){
-		argList = new ExpressionList( CurrentToken().GetFileName(), CurrentToken().GetLineNumber() );
+		argList = new ExpressionList( CurrentToken().GetLineNumber() );
 		while ( !Match( ScannerTokenType::TOKEN_CLOSED_PAREN ) ){
 			Expression* expr{ ParseAssignmentExpression() };
 			if ( !expr ) {
@@ -1031,7 +1030,7 @@ Expression* Parser::ParseLambdaExpression()
 	if ( Match( ScannerTokenType::TOKEN_OPEN_PAREN ) ){
 		NextToken(); // consume '('
 		if ( !Match( ScannerTokenType::TOKEN_CLOSED_PAREN ) ){
-			lambda_parameters = new ExpressionList( token.GetFileName(), token.GetLineNumber() );
+			lambda_parameters = new ExpressionList( token.GetLineNumber() );
 		}
 		while ( !Match( ScannerTokenType::TOKEN_END_OF_STREAM ) && !Match( ScannerTokenType::TOKEN_CLOSED_PAREN ) ){
 			lambda_parameters->AddExpression( ParseExpression() );
@@ -1044,7 +1043,7 @@ Expression* Parser::ParseLambdaExpression()
 		NextToken(); // consume ')'
 	}
 
-	return new LambdaExpression( token, lambda_parameters, ParseCompoundStatement( nullptr ) );
+	return new LambdaExpression( token, lambda_parameters, ParseCompoundStatement( nullptr, ScopeType::TEMP_SCOPE ) );
 }
 
 Expression* Parser::ParsePostfixExpression()
@@ -1070,7 +1069,7 @@ Expression* Parser::ParsePostfixExpression()
 			}
 			NextToken(); // consume ')'
 
-			expr = new FunctionCall( token.GetFileName(), token.GetLineNumber(), expr, argExprList );
+			expr = new FunctionCall( token.GetLineNumber(), expr, argExprList );
 			break;
 		}
 		case ScannerTokenType::TOKEN_OPEN_BRACKET: // array subscript
@@ -1084,7 +1083,7 @@ Expression* Parser::ParsePostfixExpression()
 				return nullptr;
 			}
 			NextToken(); // consume ']'
-			expr = new SubscriptExpression( CurrentToken().GetFileName(), CurrentToken().GetLineNumber(), expr, subscript_expression );
+			expr = new SubscriptExpression( CurrentToken().GetLineNumber(), expr, subscript_expression );
 			break;
 		}
 		case ScannerTokenType::TOKEN_PERIOD:
@@ -1098,21 +1097,21 @@ Expression* Parser::ParsePostfixExpression()
 				return nullptr;
 			}
 			NextToken(); // consume identifier
-			expr = new DotExpression( curr_token.GetFileName(), curr_token.GetLineNumber(), curr_token, expr );
+			expr = new DotExpression( curr_token.GetLineNumber(), curr_token, expr );
 			break;
 		}
 		case ScannerTokenType::TOKEN_INCR:
 		{
 			NextToken(); // consume '++'
 			auto curr_token = CurrentToken();
-			expr = new PostIncrExpression( curr_token.GetFileName(), curr_token.GetLineNumber(), expr );
+			expr = new PostIncrExpression( curr_token.GetLineNumber(), expr );
 			break;
 		}
 		case ScannerTokenType::TOKEN_DECR:
 		{
 			NextToken(); // consume '--'
 			auto curr_token = CurrentToken();
-			expr = new PostDecrExpression( curr_token.GetFileName(), curr_token.GetLineNumber(), expr );
+			expr = new PostDecrExpression( curr_token.GetLineNumber(), expr );
 			break;
 		}
 		default:
@@ -1236,7 +1235,7 @@ Declaration* Parser::ParseVariableDeclaration( Scope *parent_scope, AccessType a
 			}
 		}
 
-		VariableDeclaration* decl{ new VariableDeclaration( curr_token.GetFileName(), curr_token.GetLineNumber(), 
+		VariableDeclaration* decl{ new VariableDeclaration( curr_token.GetLineNumber(), 
 			curr_token.GetIdentifier(), assignment_expr, is_const ) };
 		decl->SetAccessType( access_type );
 		decl->SetStorageType( storage_type );
@@ -1258,12 +1257,12 @@ Declaration* Parser::ParseVariableDeclaration( Scope *parent_scope, AccessType a
 		return nullptr;
 	}
 	NextToken(); // consume ';'
-	return new DeclarationList( token.GetFileName(), token.GetLineNumber(), std::move( decl_list ) );
+	return new DeclarationList( token.GetLineNumber(), std::move( decl_list ) );
 }
 
 Statement* Parser::ParseEmptyStatement( Scope * )
 {
 	auto token = CurrentToken();
 	NextToken(); // consume ';'
-	return new EmptyStatement( token.GetFileName(), token.GetLineNumber() );
+	return new EmptyStatement( token.GetLineNumber() );
 }

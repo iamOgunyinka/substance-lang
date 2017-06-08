@@ -121,8 +121,7 @@ namespace compiler {
 	class Token {
 		ScannerTokenType	token_type;
 		std::wstring		ident;
-		std::wstring		file_name;
-
+		
 		INT_T				int_lit;
 		unsigned int		line_num;
 		FLOAT_T				double_lit;
@@ -130,14 +129,7 @@ namespace compiler {
 		BYTE_T				byte_lit;
 	public:
 		Token() = default;
-		inline const std::wstring GetFileName() const {
-			return file_name;
-		}
-
-		inline void SetFileName( std::wstring const & f ) {
-			file_name = f;
-		}
-
+		
 		inline const unsigned int GetLineNumber() const {
 			return line_num;
 		}
@@ -228,7 +220,6 @@ namespace compiler {
 			tokens[ index ]->SetType( ScannerTokenType::TOKEN_CHAR_STRING_LIT );
 			tokens[ index ]->SetLineNbr( line_num );
 			tokens[ index ]->SetIdentifier( char_string );
-			tokens[ index ]->SetFileName( file_name );
 		}
 
 		// parse an integer
@@ -241,7 +232,6 @@ namespace compiler {
 			wchar_t* end;
 			tokens[ index ]->SetType( ScannerTokenType::TOKEN_INT_LIT );
 			tokens[ index ]->SetLineNbr( line_num );
-			tokens[ index ]->SetFileName( file_name );
 			tokens[ index ]->SetIntLit( wcstol( ident.c_str(), &end, base ) );
 		}
 
@@ -253,7 +243,6 @@ namespace compiler {
 			// set token
 			tokens[ index ]->SetType( ScannerTokenType::TOKEN_FLOAT_LIT );
 			tokens[ index ]->SetLineNbr( line_num );
-			tokens[ index ]->SetFileName( file_name );
 			
 			std::string const ident( wident.begin(), wident.end() );
 			tokens[ index ]->SetFloatLit( atof( ident.c_str() ) );
@@ -268,7 +257,6 @@ namespace compiler {
 			wchar_t* end;
 			tokens[ index ]->SetType( ScannerTokenType::TOKEN_CHAR_LIT );
 			tokens[ index ]->SetLineNbr( line_num );
-			tokens[ index ]->SetFileName( file_name );
 			tokens[ index ]->SetCharLit( ( wchar_t ) wcstol( ident.c_str(), &end, 16 ) );
 		}
 
@@ -299,6 +287,7 @@ namespace compiler {
 
 		// token accessor
 		Token* GetToken( int index = 0 );
+		std::wstring const GetFileName() const { return file_name; }
 	};
 }
 

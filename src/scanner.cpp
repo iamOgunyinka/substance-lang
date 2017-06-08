@@ -17,7 +17,7 @@ using namespace compiler;
 
 using std::wstring;
 
-Scanner::Scanner( const wstring &input, bool is_file )
+Scanner::Scanner(const wstring &input, bool is_file)
 {
 	// create tokens
 	for ( int i = 0; i < LOOK_AHEAD; i++ ) {
@@ -44,13 +44,13 @@ Scanner::~Scanner()
 	// delete buffer
 	if ( buffer ) {
 		delete [] buffer;
-		buffer = NULL;
+		buffer = nullptr;
 	}
 
 	for ( int i = 0; i < LOOK_AHEAD; i++ ) {
 		Token* temp = tokens[ i ];
 		delete temp;
-		temp = NULL;
+		temp = nullptr;
 	}
 }
 
@@ -110,7 +110,6 @@ void Scanner::CheckIdentifier( int index )
 	ScannerTokenType ident_type = ( ident_find != ident_map.end() ) ? ident_find->second : ScannerTokenType::TOKEN_IDENT;
 	tokens[ index ]->SetType( ident_type );
 	tokens[ index ]->SetLineNbr( line_num );
-	tokens[ index ]->SetFileName( file_name );
 
 	if ( ident_find == ident_map.end() ){ // we have a identifier
 		tokens[ index ]->SetIdentifier( ident );
@@ -239,7 +238,6 @@ void Scanner::ParseToken( int index )
 	if ( !buffer ) {
 		tokens[ index ]->SetType( ScannerTokenType::TOKEN_NO_INPUT );
 		tokens[ index ]->SetLineNbr( line_num );
-		tokens[ index ]->SetFileName( file_name );
 		return;
 	}
 	// ignore white space
@@ -298,7 +296,6 @@ void Scanner::ParseToken( int index )
 				default:
 					tokens[ index ]->SetType( ScannerTokenType::TOKEN_UNKNOWN );
 					tokens[ index ]->SetLineNbr( line_num );
-					tokens[ index ]->SetFileName( file_name );
 					NextChar();
 					break;
 				}
@@ -331,7 +328,6 @@ void Scanner::ParseToken( int index )
 				if ( cur_char != L'\'' ) {
 					tokens[ index ]->SetType( ScannerTokenType::TOKEN_UNKNOWN );
 					tokens[ index ]->SetLineNbr( line_num );
-					tokens[ index ]->SetFileName( file_name );
 				}
 				NextChar();
 				return;
@@ -343,7 +339,6 @@ void Scanner::ParseToken( int index )
 					tokens[ index ]->SetType( ScannerTokenType::TOKEN_CHAR_LIT );
 					tokens[ index ]->SetCharLit( L'\n' );
 					tokens[ index ]->SetLineNbr( line_num );
-					tokens[ index ]->SetFileName( file_name );
 					NextChar();
 					NextChar();
 					return;
@@ -352,7 +347,6 @@ void Scanner::ParseToken( int index )
 					tokens[ index ]->SetType( ScannerTokenType::TOKEN_CHAR_LIT );
 					tokens[ index ]->SetCharLit( L'\r' );
 					tokens[ index ]->SetLineNbr( line_num );
-					tokens[ index ]->SetFileName( file_name );
 					NextChar();
 					NextChar();
 					return;
@@ -361,7 +355,6 @@ void Scanner::ParseToken( int index )
 					tokens[ index ]->SetType( ScannerTokenType::TOKEN_CHAR_LIT );
 					tokens[ index ]->SetCharLit( L'\t' );
 					tokens[ index ]->SetLineNbr( line_num );
-					tokens[ index ]->SetFileName( file_name );
 					NextChar();
 					NextChar();
 					return;
@@ -370,7 +363,6 @@ void Scanner::ParseToken( int index )
 					tokens[ index ]->SetType( ScannerTokenType::TOKEN_CHAR_LIT );
 					tokens[ index ]->SetCharLit( L'\a' );
 					tokens[ index ]->SetLineNbr( line_num );
-					tokens[ index ]->SetFileName( file_name );
 					NextChar();
 					NextChar();
 					return;
@@ -379,7 +371,6 @@ void Scanner::ParseToken( int index )
 					tokens[ index ]->SetType( ScannerTokenType::TOKEN_CHAR_LIT );
 					tokens[ index ]->SetCharLit( L'\b' );
 					tokens[ index ]->SetLineNbr( line_num );
-					tokens[ index ]->SetFileName( file_name );
 					NextChar();
 					NextChar();
 					return;
@@ -388,7 +379,6 @@ void Scanner::ParseToken( int index )
 					tokens[ index ]->SetType( ScannerTokenType::TOKEN_CHAR_LIT );
 					tokens[ index ]->SetCharLit( L'\f' );
 					tokens[ index ]->SetLineNbr( line_num );
-					tokens[ index ]->SetFileName( file_name );
 					NextChar();
 					NextChar();
 					return;
@@ -397,7 +387,6 @@ void Scanner::ParseToken( int index )
 					tokens[ index ]->SetType( ScannerTokenType::TOKEN_CHAR_LIT );
 					tokens[ index ]->SetCharLit( L'\\' );
 					tokens[ index ]->SetLineNbr( line_num );
-					tokens[ index ]->SetFileName( file_name );
 					NextChar();
 					NextChar();
 					return;
@@ -406,7 +395,6 @@ void Scanner::ParseToken( int index )
 					tokens[ index ]->SetType( ScannerTokenType::TOKEN_CHAR_LIT );
 					tokens[ index ]->SetCharLit( L'\'' );
 					tokens[ index ]->SetLineNbr( line_num );
-					tokens[ index ]->SetFileName( file_name );
 					NextChar();
 					NextChar();
 					return;
@@ -415,7 +403,6 @@ void Scanner::ParseToken( int index )
 					tokens[ index ]->SetType( ScannerTokenType::TOKEN_CHAR_LIT );
 					tokens[ index ]->SetCharLit( L'\0' );
 					tokens[ index ]->SetLineNbr( line_num );
-					tokens[ index ]->SetFileName( file_name );
 					NextChar();
 					NextChar();
 					return;
@@ -425,7 +412,6 @@ void Scanner::ParseToken( int index )
 			else {
 				tokens[ index ]->SetType( ScannerTokenType::TOKEN_UNKNOWN );
 				tokens[ index ]->SetLineNbr( line_num );
-				tokens[ index ]->SetFileName( file_name );
 				NextChar();
 				return;
 			}
@@ -435,7 +421,6 @@ void Scanner::ParseToken( int index )
 			if ( nxt_char != L'\'' ) {
 				tokens[ index ]->SetType( ScannerTokenType::TOKEN_UNKNOWN );
 				tokens[ index ]->SetLineNbr( line_num );
-				tokens[ index ]->SetFileName( file_name );
 				NextChar();
 				return;
 			}
@@ -443,7 +428,6 @@ void Scanner::ParseToken( int index )
 				tokens[ index ]->SetType( ScannerTokenType::TOKEN_CHAR_LIT );
 				tokens[ index ]->SetCharLit( cur_char );
 				tokens[ index ]->SetLineNbr( line_num );
-				tokens[ index ]->SetFileName( file_name );
 				NextChar();
 				NextChar();
 				return;
@@ -483,7 +467,6 @@ void Scanner::ParseToken( int index )
 				if ( is_double ) {
 					tokens[ index ]->SetType( ScannerTokenType::TOKEN_UNKNOWN );
 					tokens[ index ]->SetLineNbr( line_num );
-					tokens[ index ]->SetFileName( file_name );
 					NextChar();
 					break;
 				}
@@ -515,7 +498,6 @@ void Scanner::ParseToken( int index )
 		else if ( hex_state ) {
 			tokens[ index ]->SetType( ScannerTokenType::TOKEN_UNKNOWN );
 			tokens[ index ]->SetLineNbr( line_num );
-			tokens[ index ]->SetFileName( file_name );
 		}
 		else {
 			ParseInteger( index );
@@ -528,7 +510,6 @@ void Scanner::ParseToken( int index )
 		case L':':
 			tokens[ index ]->SetType( ScannerTokenType::TOKEN_COLON );
 			tokens[ index ]->SetLineNbr( line_num );
-			tokens[ index ]->SetFileName( file_name );
 			NextChar();
 			break;
 
@@ -537,7 +518,6 @@ void Scanner::ParseToken( int index )
 				NextChar();
 				tokens[ index ]->SetType( ScannerTokenType::TOKEN_ASSESSOR );
 				tokens[ index ]->SetLineNbr( line_num );
-				tokens[ index ]->SetFileName( file_name );
 				NextChar();
 			}
 			else if ( nxt_char == L'=' ) {
@@ -551,7 +531,6 @@ void Scanner::ParseToken( int index )
 			else {
 				tokens[ index ]->SetType( ScannerTokenType::TOKEN_SUB );
 			}
-			tokens[ index ]->SetFileName( file_name );
 			tokens[ index ]->SetLineNbr( line_num );
 			NextChar();
 			break;
@@ -559,63 +538,54 @@ void Scanner::ParseToken( int index )
 		case L'{':
 			tokens[ index ]->SetType( ScannerTokenType::TOKEN_OPEN_BRACE );
 			tokens[ index ]->SetLineNbr( line_num );
-			tokens[ index ]->SetFileName( file_name );
 			NextChar();
 			break;
 
 		case L'}':
 			tokens[ index ]->SetType( ScannerTokenType::TOKEN_CLOSED_BRACE );
 			tokens[ index ]->SetLineNbr( line_num );
-			tokens[ index ]->SetFileName( file_name );
 			NextChar();
 			break;
 
 		case L'.':
 			tokens[ index ]->SetType( ScannerTokenType::TOKEN_PERIOD );
 			tokens[ index ]->SetLineNbr( line_num );
-			tokens[ index ]->SetFileName( file_name );
 			NextChar();
 			break;
 
 		case L'[':
 			tokens[ index ]->SetType( ScannerTokenType::TOKEN_OPEN_BRACKET );
 			tokens[ index ]->SetLineNbr( line_num );
-			tokens[ index ]->SetFileName( file_name );
 			NextChar();
 			break;
 
 		case L']':
 			tokens[ index ]->SetType( ScannerTokenType::TOKEN_CLOSED_BRACKET );
 			tokens[ index ]->SetLineNbr( line_num );
-			tokens[ index ]->SetFileName( file_name );
 			NextChar();
 			break;
 
 		case L'(':
 			tokens[ index ]->SetType( ScannerTokenType::TOKEN_OPEN_PAREN );
 			tokens[ index ]->SetLineNbr( line_num );
-			tokens[ index ]->SetFileName( file_name );
 			NextChar();
 			break;
 
 		case L')':
 			tokens[ index ]->SetType( ScannerTokenType::TOKEN_CLOSED_PAREN );
 			tokens[ index ]->SetLineNbr( line_num );
-			tokens[ index ]->SetFileName( file_name );
 			NextChar();
 			break;
 
 		case L',':
 			tokens[ index ]->SetType( ScannerTokenType::TOKEN_COMMA );
 			tokens[ index ]->SetLineNbr( line_num );
-			tokens[ index ]->SetFileName( file_name );
 			NextChar();
 			break;
 
 		case L';':
 			tokens[ index ]->SetType( ScannerTokenType::TOKEN_SEMI_COLON );
 			tokens[ index ]->SetLineNbr( line_num );
-			tokens[ index ]->SetFileName( file_name );
 			NextChar();
 			break;
 
@@ -628,13 +598,11 @@ void Scanner::ParseToken( int index )
 				tokens[ index ]->SetType( ScannerTokenType::TOKEN_AND );
 			}
 			tokens[ index ]->SetLineNbr( line_num );
-			tokens[ index ]->SetFileName( file_name );
 			NextChar();
 			break;
 		case L'?':
 			tokens[ index ]->SetType( ScannerTokenType::TOKEN_QUESTION_MARK );
 			tokens[ index ]->SetLineNbr( line_num );
-			tokens[ index ]->SetFileName( file_name );
 			NextChar();
 			break;
 		case L'|':
@@ -646,7 +614,6 @@ void Scanner::ParseToken( int index )
 				tokens[ index ]->SetType( ScannerTokenType::TOKEN_OR );
 			}
 			tokens[ index ]->SetLineNbr( line_num );
-			tokens[ index ]->SetFileName( file_name );
 			NextChar();
 			break;
 
@@ -655,13 +622,11 @@ void Scanner::ParseToken( int index )
 				NextChar();
 				tokens[ index ]->SetType( ScannerTokenType::TOKEN_EQL );
 				tokens[ index ]->SetLineNbr( line_num );
-				tokens[ index ]->SetFileName( file_name );
 				NextChar();
 			}
 			else {
 				tokens[ index ]->SetType( ScannerTokenType::TOKEN_ASSIGN );
 				tokens[ index ]->SetLineNbr( line_num );
-				tokens[ index ]->SetFileName( file_name );
 				NextChar();
 			}
 			break;
@@ -671,12 +636,10 @@ void Scanner::ParseToken( int index )
 				NextChar();
 				tokens[ index ]->SetType( ScannerTokenType::TOKEN_NEQL );
 				tokens[ index ]->SetLineNbr( line_num );
-				tokens[ index ]->SetFileName( file_name );
 			}
 			else {
 				tokens[ index ]->SetType( ScannerTokenType::TOKEN_NOT );
 				tokens[ index ]->SetLineNbr( line_num );
-				tokens[ index ]->SetFileName( file_name );
 			}
 			NextChar();
 			break;
@@ -694,7 +657,6 @@ void Scanner::ParseToken( int index )
 				tokens[ index ]->SetType( ScannerTokenType::TOKEN_LES );
 			}
 			tokens[ index ]->SetLineNbr( line_num );
-			tokens[ index ]->SetFileName( file_name );
 			NextChar();
 			break;
 
@@ -712,7 +674,6 @@ void Scanner::ParseToken( int index )
 				tokens[ index ]->SetType( ScannerTokenType::TOKEN_GTR );
 			}
 			tokens[ index ]->SetLineNbr( line_num );
-			tokens[ index ]->SetFileName( file_name );
 			NextChar();
 			break;
 
@@ -729,7 +690,6 @@ void Scanner::ParseToken( int index )
 				tokens[ index ]->SetType( ScannerTokenType::TOKEN_ADD );
 			}
 			tokens[ index ]->SetLineNbr( line_num );
-			tokens[ index ]->SetFileName( file_name );
 			NextChar();
 			break;
 
@@ -746,7 +706,6 @@ void Scanner::ParseToken( int index )
 				tokens[ index ]->SetType( ScannerTokenType::TOKEN_MUL );
 			}
 			tokens[ index ]->SetLineNbr( line_num );
-			tokens[ index ]->SetFileName( file_name );
 			NextChar();
 			break;
 
@@ -755,45 +714,38 @@ void Scanner::ParseToken( int index )
 				NextChar();
 				tokens[ index ]->SetType( ScannerTokenType::TOKEN_DIV_EQL );
 				tokens[ index ]->SetLineNbr( line_num );
-				tokens[ index ]->SetFileName( file_name );
 				NextChar();
 			}
 			else {
 				tokens[ index ]->SetType( ScannerTokenType::TOKEN_DIV );
 				tokens[ index ]->SetLineNbr( line_num );
-				tokens[ index ]->SetFileName( file_name );
 				NextChar();
 			}
 			break;
 		case L'%':
 			tokens[ index ]->SetType( ScannerTokenType::TOKEN_MOD );
 			tokens[ index ]->SetLineNbr( line_num );
-			tokens[ index ]->SetFileName( file_name );
 			NextChar();
 			break;
 		case L'^':
 			tokens[ index ]->SetType( ScannerTokenType::TOKEN_XOR );
 			tokens[ index ]->SetLineNbr( line_num );
-			tokens[ index ]->SetFileName( file_name );
 			NextChar();
 			break;
 		case L'@':
 			tokens[ index ]->SetType( ScannerTokenType::TOKEN_AT );
 			tokens[ index ]->SetLineNbr( line_num );
-			tokens[ index ]->SetFileName( file_name );
 			NextChar();
 			break;
 		case EOB:
 			tokens[ index ]->SetType( ScannerTokenType::TOKEN_END_OF_STREAM );
 			tokens[ index ]->SetLineNbr( line_num );
-			tokens[ index ]->SetFileName( file_name );
 			break;
 
 		default:
 			ProcessWarning();
 			tokens[ index ]->SetType( ScannerTokenType::TOKEN_UNKNOWN );
 			tokens[ index ]->SetLineNbr( line_num );
-			tokens[ index ]->SetFileName( file_name );
 			NextChar();
 			break;
 		}

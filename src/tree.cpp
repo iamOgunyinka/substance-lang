@@ -41,7 +41,7 @@ Scope::list_of_ptrs<Statement>& Scope::GetStatements(){
 bool Scope::AddDeclaration( Declaration *decl )
 {
 	if ( !declarations ){ // perhaps the first declaration, makes sense to use the filename and line number
-		declarations = new DeclarationList( decl->GetFileName(), decl->GetLineNumber() );
+		declarations = new DeclarationList( decl->GetLineNumber() );
 	}
 	return declarations->AddDeclaration( decl );
 }

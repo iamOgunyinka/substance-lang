@@ -1,52 +1,42 @@
 #pragma once
 
-#include <memory>
 #include <vector>
+
+#define SCOPE Scope *scope
 
 namespace compiler {
 	// forward declarations
-	class ParsedProgram;
 	class Scope;
+	class Statement;
+	class Expression;
+	class ParsedProgram;
 
 	class SemaCheck1
 	{
 		std::vector<std::wstring>	error_messages;
-		public:
+
+		bool is_parsing_loops;
+		bool is_parsing_function;
+	public:
 		SemaCheck1();
 		~SemaCheck1() = default;
-
-		bool Visit( compiler::ParsedProgram* program );
-		void AnalyzeScope( Scope* );
 		void ReportErrors();
-		
+		bool Visit( ParsedProgram* program );
+
+	private:
+		void AnalyzeScope( SCOPE );
+		void AnalyzeExpressionStatement( Statement *expression_statement );
+		void AnalyzeDeclaration( Statement *decl, SCOPE );
+		void AnalyzeJumpStatement( Statement *statement, SCOPE );
+		void AnalyzeLoopingStatements( Statement * statement, SCOPE );
+		void AnalyzeForEachStatement( Statement *statement, SCOPE );
+		void AnalyzeInfiniteLoopStatement( Statement *statement, SCOPE );
+		void AnalyzeDoWhileStatement( Statement *statement, SCOPE );
+		void AnalyzeWhileStatement( Statement *statement, SCOPE );
+
+		void AnalyzeBlockStatement( Statement *statement, SCOPE );
+		void AnalyzeExpression( Expression *expr, SCOPE );
 		void AppendError( std::wstring const & );
-		
-	};
 
-	class SemaCheck2
-	{
-		Scope						*current_scope;
-		bool						parsingIteration;
-		bool						parsingSelection;
-		std::vector<std::wstring>	error_messages;
-	public:
-		SemaCheck2();
-		void ReportErrors();
-
-		inline bool IsParsingIteration(){ return parsingIteration; }
-		inline bool IsParsingSelection(){ return parsingSelection; }
-		inline Scope*  GetCurrentScope(){ return current_scope; }
-
-		void SetParsingIteration( bool flag ){
-			parsingIteration = flag;
-		}
-		void SetParsingSelection( bool flag ){
-			parsingSelection = flag;
-		}
-		void SetCurrentScope( Scope *scope ){
-			current_scope = scope;
-		}
-
-		bool Visit( compiler::ParsedProgram* parsed_program );
 	};
 }
