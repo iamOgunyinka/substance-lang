@@ -8,10 +8,10 @@ function bar ()
 }
 
 function foo() {
-	l = String.new();
+	l = new String();
 	l += 13;
 	
-	r = String.new();
+	r = new String();
 	r += 1001;
 /*
 	l += r;
@@ -19,47 +19,46 @@ function foo() {
 */
 }
 
-/*
-b = Bar.new();
+b = Bar._new();
 b.bar(7);
 
 class Bar {
 	var v;
 	
-	construct new (b) {
+	construct Bar (b) {
 		v = b;
 	}
 	
-	construct new () {}
+	construct Bar () {}
 	function bar(b) {
 		if(b == 387) {
 			show 101;
 		}
 		else {
 			show b;
-		};
+		}
 	}
 }
 
 // v = Int.new[2,2];
-v = Array.new[2,3];
-v[0,1] = 12;
+v = Array.new_[2][3];
+v[0][1] = 12;
 
 
 x = 101;
 
 bar();
-r = Bar.new(b);
+r = Bar.new_(b);
 r.bar(387);
 
 
 foo();
 
-function foo() { show 13; }
+function foo( a ) { show 13 * a; }
 
 v = -18.abs();
 // tt = v.abs();
-*/
+/**/
 
 foo();
 

@@ -1,8 +1,8 @@
-f = Foo.new();
+f = new Foo();
 // f.s(13);
 show f.g();
 
-b = Bar.new();
+b = new Bar();
 b.s(7);
 show b.g();
 
@@ -19,9 +19,9 @@ bar(y) {
 class Foo {
 	var v;
 	
-	construct new() { v = 10; }
+	construct Foo() { v = 10; }
 	
-	+(x) { return 3 + v; }
+	function Add(x) { return 3 + v; }
 	
 	function s(p) {
 		v = p;
@@ -35,7 +35,7 @@ class Foo {
 class Bar {
 	var v;
 	
-	construct new() {}
+	construct Bar() {}
 	
 	function s(p) {
 		v = p;

@@ -1,20 +1,31 @@
-struct MyStruct {
-	var a, b, c;
-	private var d, e, f;
-	protected static const g = 12, h = new Foo( a );
-	extern var fg;
-	
-	public construct MyStruct() {
+
+struct Foo {
+	struct MyStruct {
+		var a, b, c;
+		private var d, e, f;
+		protected static const g = 12, h = new Foo( a );
+		extern var fg;
+		
+		public construct MyStruct() {
+		}
+		
+		protected method GetA(){
+			return a;
+		}
+		
+		public method SetD( d_ ){
+			d = d_;
+		}
+		class MyStructInner {
+			var c;
+			class MyInnerInnerStruct {} 
+		}
 	}
-	
-	protected method GetA(){
-		return a;
+}
+
+block {
+	function My_Struct(){
 	}
-	
-	public method SetD( d_ ){
-		d = d_;
-	}
-	class MyStructInner {}
 }
 
 class MyClass : MyStruct

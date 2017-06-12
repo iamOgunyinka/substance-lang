@@ -230,9 +230,7 @@ Declaration* Parser::ParseClass( Scope *parent_scope, AccessType access_type, St
 			klass = nullptr;
 			return klass;
 		}
-		if ( !klass->AddDeclaration( decl ) ){
-			ProcessError( L"'" + decl->GetName() + L"' already exist in this scope", decl->GetLineNumber() );
-		}
+		klass->AddStatement( decl );
 	}
 	if ( !Match( ScannerTokenType::TOKEN_CLOSED_BRACE ) ){
 		ProcessError( L"Expected a closing brace at the end of class declaration." );
@@ -243,6 +241,7 @@ Declaration* Parser::ParseClass( Scope *parent_scope, AccessType access_type, St
 	NextToken(); // consume '}'
 	klass->SetStorageType( storage_type );
 	klass->SetAccessType( access_type );
+	klass->GetClassScope()->SetScopeType( ScopeType::CLASS_SCOPE );
 	return klass;
 }
 
@@ -336,8 +335,8 @@ Declaration* Parser::ParseFunction( Scope *parent_scope, FunctionType function_t
 
 		return nullptr;
 	}
-	function_body->GetScope()->SetScopeType( ScopeType::FUNCTION_SCOPE );
 
+	function_body->GetScope()->SetScopeType( ScopeType::FUNCTION_SCOPE );
 	FunctionDeclaration* function{ new FunctionDeclaration( line_num, function_name, std::move( parameters ) ) };
 	function->SetFunctionBody( function_body );
 	function->SetFunctionType( function_type );
@@ -513,6 +512,7 @@ Statement* Parser::ParseIfStatement( Scope *parent_scope )
 	Statement* else_statement{};
 
 	if ( Match( ScannerTokenType::TOKEN_ELSE_ID ) ){
+		NextToken(); // consume 'else'
 		else_statement = ParseCompoundStatement( parent_scope, ScopeType::TEMP_SCOPE );
 		if ( !else_statement ){
 			ProcessError( L"Error while processing the else part of the if statement." );
@@ -1235,7 +1235,7 @@ Declaration* Parser::ParseVariableDeclaration( Scope *parent_scope, AccessType a
 			}
 		}
 
-		VariableDeclaration* decl{ new VariableDeclaration( curr_token.GetLineNumber(), 
+		VariableDeclaration* decl{ new VariableDeclaration( curr_token.GetLineNumber(),
 			curr_token.GetIdentifier(), assignment_expr, is_const ) };
 		decl->SetAccessType( access_type );
 		decl->SetStorageType( storage_type );
@@ -1257,7 +1257,7 @@ Declaration* Parser::ParseVariableDeclaration( Scope *parent_scope, AccessType a
 		return nullptr;
 	}
 	NextToken(); // consume ';'
-	return new DeclarationList( token.GetLineNumber(), std::move( decl_list ) );
+	return new DeclarationList( token.GetLineNumber(), access_type, storage_type, std::move( decl_list ) );
 }
 
 Statement* Parser::ParseEmptyStatement( Scope * )

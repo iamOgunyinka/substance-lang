@@ -1,38 +1,41 @@
-static function testing( first_arg, second_arg )
-{
-	for each( a in [ 1, 2, 3, 4, 5, 9 ] ){
-		show a;
-	}
-	foreach( b in { "a": 1, 1 + 1 : Foo(), Foo() : "Me" } ){
-		show b.key();
-		show b.value();
+class Foo {
+	static function testing( first_arg, second_arg )
+	{
+		for each( a in [ 1, 2, 3, 4, 5, 9 ] ){
+			show a;
+		}
+		foreach( b in { "a": 1, 1 + 1 : Foo(), Foo() : "Me" } ){
+			show b.key();
+			show b.value();
+		}
+		
+		for each( s in {} ){}
+		foreach( iter in [] ){
+			//do nothing
+		}
+		var c = @{ return @( a ){ return 12 * first_arg + second_arg; }; };
+		show c()( 15 );
 	}
 	
-	for each( s in {} ){}
-	foreach( iter in [] ){
-		//do nothing
+	var global_var = 12, global_lambda = @( a ){ show a; };
+	
+	//show global_lambda( global_var );
+	
+	//c = 12; // a variable declaration
+	//c = new School();
+	
+	// OK
+	static function testing_another(){
 	}
-	var c = @{ return @( a ){ return 12 * first_arg + second_arg; }; };
-	show c()( 15 );
+}
+class A {
+	private method c(){
+		static function testing( first_arg, second_arg ){
+		}
+	}
 }
 
-var global_var = 12, global_lambda = @( a ){ show a; };
-
-show global_lambda( global_var );
-
-c = 12; // a variable declaration
-c = new School();
-
-//expects no error, same name but different parameter size
-static function testing( first_arg )
-{
-}
-
-// OK
-static function testing_another(){
-}
-
-function main( a )
+function main( a, b )
 {
 	do {
 		testing( c , c + 1 );

@@ -57,10 +57,10 @@ struct _Value;
 /****************************
 * Utility functions
 ****************************/
+#include <string>
+
 inline std::wstring IntToString( int v ) {
-	std::wostringstream str;
-	str << v;
-	return str.str();
+	return std::to_wstring( v );
 }
 
 /****************************
@@ -151,15 +151,10 @@ enum RuntimeType {
  ****************************/
 class Value {
 public:
-	Value() {
-		sys_klass = NULL;
-		user_klass = NULL;
+	Value(): sys_klass( nullptr ), user_klass( nullptr ) {
 	}
 
-	Value( RuntimeType t ) {
-		type = t;
-		sys_klass = NULL;
-		user_klass = NULL;
+	Value( RuntimeType t ): type( t ), sys_klass( nullptr ), user_klass( nullptr ) {
 	}
 
 	RuntimeType type;
@@ -189,7 +184,7 @@ class ExecutableFunction {
 	std::set<size_t> leaders;
 
 public:
-	ExecutableFunction( const std::wstring &name, InstructionType operation, int local_count, int parameter_count,
+	explicit ExecutableFunction( const std::wstring &name, InstructionType operation, int local_count, int parameter_count,
 		std::vector<Instruction*> && block_instructions, std::unordered_map<long, size_t> && jump_table,
 		std::set<size_t> &leaders, bool returns_value ) {
 		this->name = name;
@@ -250,9 +245,7 @@ class ExecutableClass {
 	int inst_count;
 
 public:
-	ExecutableClass( const std::wstring name, int inst_count ) {
-		this->name = name;
-		this->inst_count = inst_count;
+	explicit ExecutableClass( const std::wstring name_, int inst_count_ ): name( name_ ), inst_count( inst_count_ ) {
 	}
 
 	~ExecutableClass() {

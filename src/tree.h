@@ -25,8 +25,7 @@ namespace compiler {
 	class DeclarationList;
 	class Statement;
 	class SemaCheck1;
-	class SemaCheck2;
-	class SemaType;
+	struct SemaType;
 
 	enum class DeclarationType;
 	enum class StatementType;
@@ -48,34 +47,21 @@ namespace compiler {
 		const int GetLineNumber() {
 			return line_num;
 		}
-		SemaType *type;
+		SemaType	*type;
 	};
 
 	/****************************
 	 * Expression types
 	 ****************************/
 	enum class ExpressionType {
-		REF_EXPR = -100,
 		NULL_LIT_EXPR,
 		CHAR_LIT_EXPR,
 		INT_LIT_EXPR,
 		FLOAT_LIT_EXPR,
 		BOOLEAN_LIT_EXPR,
-		AND_EXPR,
-		OR_EXPR,
-		EQL_EXPR,
-		NEQL_EXPR,
-		LES_EXPR,
-		GTR_EQL_EXPR,
-		LES_EQL_EXPR,
-		GTR_EXPR,
-		ADD_EXPR,
-		SUB_EXPR,
-		MUL_EXPR,
-		DIV_EXPR,
-		MOD_EXPR,
-		// Newly added expressions
 		CHAR_STR_EXPR,
+		
+		// Newly added expressions
 		FUNCTION_CALL_EXPR,
 		ASSIGNMENT_EXPR,
 		VARIABLE_EXPR,
@@ -123,7 +109,9 @@ namespace compiler {
 		std::deque<Expression*>& GetExpressions() {
 			return expressions;
 		}
-
+		Expression* GetExpressionAt( unsigned int i ) {
+			return expressions.at( i );
+		}
 		std::deque<Expression*>::size_type Length(){
 			return expressions.size();
 		}
@@ -492,6 +480,7 @@ namespace compiler {
 		int		LocalCount() const;
 		void	SetLocalCount( int count );
 
+		ScopeType					GetScopeType() const;
 		DeclarationList*			GetDeclarationList();
 		list_of_ptrs<Statement>&	GetStatements();
 		Declaration*				FindDeclaration( std::wstring const & identifier );
@@ -559,8 +548,10 @@ namespace compiler {
 		declaration_list_t declarations;
 	public:
 
-		DeclarationList( unsigned int const line_number, declaration_list_t && decl_list = {} ) :
+		DeclarationList( unsigned int const line_number, AccessType access, StorageType storage, declaration_list_t && decl_list = {} ) :
 			Declaration( line_number ), declarations( std::move( decl_list ) ){
+			SetAccessType( access );
+			SetStorageType( storage );
 		}
 		~DeclarationList(){
 			for ( std::pair< std::wstring const, Declaration*> &decl : declarations ){
@@ -762,13 +753,13 @@ namespace compiler {
 	};
 
 
-	class Dump : public Statement {
+	class DumpStatement : public Statement {
 		Expression* expression;
 
 	public:
-		Dump( unsigned int const line_num, Expression* expr ) : Statement( line_num ), expression( expr ) {
+		DumpStatement( unsigned int const line_num, Expression* expr ) : Statement( line_num ), expression( expr ) {
 		}
-		~Dump(){
+		~DumpStatement(){
 			delete expression;
 			expression = nullptr;
 		}
@@ -890,16 +881,23 @@ namespace compiler {
 		Expression* expression;
 		Statement*	body_statement;
 	public:
+		Declaration* decl;
 		ForEachStatement( unsigned int const line_number, Expression* expr, Statement* body ) : Statement( line_number ), 
-			expression( expr ), body_statement( body ){
+			expression( expr ), body_statement( body ), decl( nullptr ){
 		}
 		~ForEachStatement(){
 			delete expression;
 			delete body_statement;
-
+			if ( decl ){
+				delete decl;
+				decl = nullptr;
+			}
 			expression = nullptr;
 			body_statement = nullptr;
 		}
+
+		Expression* GetExpression() const { return expression; }
+		Statement*	GetStatement() const  { return body_statement; }
 
 		StatementType GetStatementType() const final override {
 			return StatementType::FOR_EACH_IN_STATEMENT;
@@ -969,6 +967,7 @@ namespace compiler {
 			rhs = nullptr;
 		}
 
+		Token const GetToken() const { return token;  }
 		Expression* GetLHSExpression() {
 			return lhs;
 		}
@@ -1063,8 +1062,8 @@ namespace compiler {
 	};
 
 	class UnaryOperation : public UnaryExpression {
-		Expression*	expression;
-		ScannerTokenType			type;
+		Expression			*expression;
+		ScannerTokenType	type;
 	public:
 		UnaryOperation( unsigned int const line_num, ScannerTokenType t, Expression* expr ) :
 			UnaryExpression( line_num ), type( t ),
@@ -1283,6 +1282,7 @@ namespace compiler {
 			parameters = nullptr;
 		}
 
+		CompoundStatement* GetFunctionBody() const { return function_body;  }
 		StatementType GetStatementType() const final override {
 			return StatementType::FUNCTION_DECL_STMT;
 		}
@@ -1364,25 +1364,45 @@ namespace compiler {
 	class ClassDeclaration : public Declaration {
 		bool				is_struct_;
 		std::wstring		base_class_name;
-		DeclarationList*	decl_list;		// functions, methods, variables, ctors;
+		Scope				*scope; // functions, methods, variables, ctors;
 		unsigned int		instance_variable_count;
 		unsigned int		static_variable_count;
+
+		std::vector<Declaration*> decl_list;
 	public:
-		ClassDeclaration( const unsigned int line_num, const std::wstring &name, Scope *, bool is_struct ) 
+		ClassDeclaration( const unsigned int line_num, const std::wstring &name, Scope *parent, bool is_struct ) 
 			:Declaration( line_num, name ), is_struct_( is_struct ),
-			decl_list( new DeclarationList( line_num ) ),
+			scope( new Scope( parent ) ),
 			instance_variable_count(0), static_variable_count( 0 )
 		{
 		}
 		~ClassDeclaration(){
-			if ( decl_list ){
-				delete decl_list;
+			if ( !decl_list.empty() ){
+				for ( auto & decl : decl_list ){
+					delete decl;
+					decl = nullptr;
+				}
+				decl_list.clear();
 			}
-			decl_list = nullptr;
+
+			delete scope;
+			scope = nullptr;
 		}
 
+		Scope* GetClassScope(){
+			return scope;
+		}
+		
+		DeclarationList* GetDeclarations() const {
+			return scope->GetDeclarationList();
+		}
+
+		std::vector<Declaration*>& GetDeclList() { return decl_list; }
+		void AddStatement( Declaration *stmt ){
+			decl_list.push_back( stmt );
+		}
 		bool AddDeclaration( Declaration* decl ){
-			return decl_list->AddDeclaration( decl );
+			return scope->AddDeclaration( decl );
 		}
 
 		StatementType GetStatementType() const override final {
@@ -1501,7 +1521,7 @@ namespace compiler {
 
 		static Statement* MakeShowExpressionStatement( Token const & tok, Expression* expr )
 		{
-			Statement* dump_statement{ new Dump( tok.GetLineNumber(), expr ) };
+			Statement* dump_statement{ new DumpStatement( tok.GetLineNumber(), expr ) };
 			return dump_statement;
 		}
 
